@@ -1,0 +1,35 @@
+/* Local presentation only. Upstream InteractiveHtmlBom is retained unmodified. */
+body, .bom {font-family: "Segoe UI", "Microsoft YaHei", sans-serif;}
+.foc-head {padding: 13px 18px 11px; border-bottom: 1px solid #45555b; flex: 0 0 auto;}
+.foc-head-row {display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+.foc-brand {font-size:19px; font-weight:700; letter-spacing:.4px;}
+.foc-tag {font-size:12px; color:#85d7c1; border:1px solid #3b6d62; border-radius:20px; padding:3px 9px;}
+.foc-progress {margin-left:auto; font-size:13px; font-variant-numeric:tabular-nums;}
+.foc-head button {width:auto; height:31px; font-size:12px; border-radius:5px; padding:0 11px; background:#263c3b; border-color:#5b8077; color:#e3f5ee; cursor:pointer;}
+.foc-help {font-size:12px; line-height:1.7; opacity:.76; margin-top:7px;}
+.foc-help strong {color:inherit;}
+.foc-meter {height:3px; border-radius:3px; background:#3d494e; margin-top:9px; overflow:hidden;}
+.foc-meter span {display:block; width:0; height:100%; background:#65d8ac; transition:width .2s;}
+.foc-filterbar {display:flex; gap:5px; align-items:center; flex-wrap:wrap; padding:7px 8px;}
+.foc-filterbar button {height:27px; width:auto; font-size:12px; padding:0 10px; border-radius:4px; cursor:pointer;}
+.foc-filterbar .foc-active {background:#2b6857; color:#f1fff9; border-color:#73c0a5;}
+.foc-detail {margin:0 8px 8px; padding:9px 11px; border:1px solid #486058; border-radius:5px; min-height:35px; font-size:12px; line-height:1.7; flex:0 0 auto;}
+.foc-detail strong {font-size:13px; color:#81dfbb;}
+#top {justify-content:space-between; padding:8px 10px; gap:6px;}
+#fileinfodiv {font-size:12px; min-width:125px;}
+.title {font-size:16px;}
+.bom {font-size:12px;}
+.bom th {font-size:12px;}
+.bom td,.bom th {padding:7px 5px; border-color:#506068;}
+.bom .bom-checkbox {width:37px;}
+.bom .quantity {width:35px;}
+.bom .numCol {width:23px;}
+.bom .value {width:20%;}
+.bom input[type=checkbox] {width:17px; height:17px; cursor:pointer; accent-color:#57b892;}
+.bom td[col_name="装配备注"] {font-size:11px; text-align:left;}
+.bom .bom-checkbox:after {content:"双击可整列勾选或取消";}
+#frontcanvas::after {content:"正面 · 从元件面看"; position:absolute; bottom:8px; left:10px; font-size:12px; pointer-events:none; opacity:.6;}
+#backcanvas::after {content:"背面 · 已镜像，翻板后对照"; position:absolute; bottom:8px; left:10px; font-size:12px; pointer-events:none; opacity:.6;}
+#frontcanvas,#backcanvas {position:relative;}
+@media(max-width:900px) {.foc-progress {margin-left:0;} .foc-brand {font-size:16px;} .foc-head {padding:10px;} .foc-help {font-size:11px;}}
+@media print {.foc-head button,.foc-filterbar {display:none;} .foc-head {color:#111;}}

@@ -1,0 +1,35 @@
+# Local assembly projects, progress, generated pages and machine preferences.
+/output/
+/settings.json
+/build/
+/tests/results/
+/tests/fixtures/
+/tests/unpacked/
+__pycache__/
+*.py[cod]
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Keep the distributable EXE; rebuild local ZIPs and build reports as needed.
+/dist/*
+!/dist/KiCad焊接助手.exe
+!/dist/SHA256SUMS.txt
+
+# Earlier project-specific checks are preserved locally, not part of the app.
+/tests/test_foc_ui.cjs
+/tests/test_generic_ui.cjs
+
+# Vendor only the runtime and its upstream notices.
+/vendor/InteractiveHtmlBom/*
+!/vendor/InteractiveHtmlBom/InteractiveHtmlBom/
+!/vendor/InteractiveHtmlBom/LICENSE
+!/vendor/InteractiveHtmlBom/README.md
+
+# An assembly project must never be added to this tool repository accidentally.
+*.kicad_pcb
+*.kicad_sch
+*.kicad_pro
+*.kicad_prl
+*.net
