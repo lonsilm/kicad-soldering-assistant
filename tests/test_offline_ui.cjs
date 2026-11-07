@@ -61,15 +61,34 @@ async function main(){
       }
     }
     await page.setViewportSize({width:1280,height:800});await page.locator('#lr-btn').click();
-    await page.evaluate(()=>setDarkMode(false));
-    assert.equal(await page.evaluate(()=>getComputedStyle(document.getElementById('topmostdiv')).color),'rgb(35, 51, 68)');
-    await page.evaluate(()=>setDarkMode(true));
+    const countBeforeTheme=await page.evaluate(()=>getStoredCheckboxRefs('已焊接').size);
+    for(const [theme,color] of [['peach','rgb(68, 59, 56)'],['blue','rgb(52, 68, 90)'],['lilac','rgb(75, 61, 89)']]) {
+      await page.getByRole('combobox',{name:'界面主题'}).selectOption(theme);
+      assert.equal(await page.evaluate(()=>document.getElementById('topmostdiv').dataset.theme),theme);
+      assert.equal(await page.evaluate(()=>getComputedStyle(document.getElementById('topmostdiv')).color),color);
+      assert.equal(await page.evaluate(()=>settings.darkMode),false);
+      const contrasts=await page.evaluate(()=>{
+        const style=getComputedStyle(document.documentElement);
+        const lum=key=>{const h=style.getPropertyValue(key).trim().slice(1);const c=[0,2,4].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return c[0]*.2126+c[1]*.7152+c[2]*.0722;};
+        return [['--ui-muted','--ui-raised'],['--ui-accent','--ui-active'],['--ui-text','--ui-panel']].map(([fg,bg])=>(Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05));
+      });
+      assert(contrasts.every(r=>r>=4.5),JSON.stringify({theme,contrasts}));
+      assert.equal(await page.evaluate(()=>getStoredCheckboxRefs('已焊接').size),countBeforeTheme);
+      await page.waitForFunction(()=>getComputedStyle(document.getElementById('filter')).backgroundColor===getComputedStyle(document.getElementById('topmostdiv')).backgroundColor);
+      await page.screenshot({path:path.join(results,'theme-'+theme+'-workspace.png')});
+      await page.reload();await page.locator('#foc-progress').waitFor();
+      assert.equal(await page.getByRole('combobox',{name:'界面主题'}).inputValue(),theme,'Theme must survive restart');
+    }
+    await page.getByRole('combobox',{name:'界面主题'}).selectOption('peach');
+    await page.evaluate(()=>{assemblySetTheme('invalid-theme');setDarkMode(true);});
+    assert.equal(await page.evaluate(()=>document.getElementById('topmostdiv').dataset.theme),'peach');
+    assert.equal(await page.evaluate(()=>settings.darkMode),false);
     await page.keyboard.press('Alt+r');assert.equal(await page.evaluate(()=>document.activeElement.id),'reflookup');
     await page.screenshot({path:path.join(results,'redesigned-workspace-1280.png')});
     assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
     fs.writeFileSync(path.join(results,'OFFLINE_UI_VALIDATION.json'),JSON.stringify({passed:true,
       assembly_count:refs.length,checks:['actual PCB reference set','reference lookup and highlight','reference-based progress',
-      'reload persistence','backup and restore','front/back','1080p effective viewport at 100/125/150/200 percent scale','1024/1280/1920 viewport sizes','left/right and top/bottom pane geometry','light/dark contrast','keyboard focus','zero external requests'],errors,network},null,2));
+      'reload persistence','backup and restore','front/back','1080p effective viewport at 100/125/150/200 percent scale','1024/1280/1920 viewport sizes','left/right and top/bottom pane geometry','three palette contrast, persistence and progress retention','keyboard focus','zero external requests'],errors,network},null,2));
     fs.unlinkSync(backup);console.log('PASS: generated offline HTML, highlight, persistence, backup/restore, front/back, no external requests');
   }finally{await browser.close();}
 }

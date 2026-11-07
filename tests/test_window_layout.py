@@ -14,6 +14,8 @@ result = subprocess.run([str(exe), '--layout-test', '--test-root', str(state)], 
 report = json.loads((state / 'LAYOUT_TEST.json').read_text(encoding='utf-8'))
 assert result.returncode == 0 and report['passed'], report
 assert len(report['layouts']) == 18, report
+assert report['themes'] == ['peach', 'blue', 'lilac']
+assert all((state / ('theme-' + theme + '.png')).is_file() for theme in report['themes'])
 assert {r['dpi'] for r in report['layouts']} == {96, 120, 144, 192}
 assert all(Path(r['screenshot']).is_file() for r in report['layouts'])
 print('PASS: 16 work-area/DPI layouts plus two resized windows; text fits, window stays inside working area, short pages scroll')

@@ -19,15 +19,15 @@ foreach ($size in $sizes) {
     $graphics=[Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode='AntiAlias'
     $graphics.ScaleTransform($size/256.0,$size/256.0)
-    $navy=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(14,30,46))
-    $green=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(65,213,166))
-    $white=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(243,249,252))
-    $gold=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(255,201,94))
+    $navy=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(248,229,219))
+    $green=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(163,74,55))
+    $white=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(255,253,250))
+    $gold=New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(115,100,149))
     $path=Rounded-Path 4 4 248 248 52
     $graphics.FillPath($navy,$path)
     $path.Dispose()
     $chip=Rounded-Path 62 62 132 132 15
-    $pen=New-Object Drawing.Pen([Drawing.Color]::FromArgb(65,213,166),11)
+    $pen=New-Object Drawing.Pen([Drawing.Color]::FromArgb(163,74,55),11)
     $graphics.DrawPath($pen,$chip)
     foreach ($position in @(84,118,152)) {
         $graphics.FillRectangle($green,$position,42,16,22)
@@ -35,7 +35,7 @@ foreach ($size in $sizes) {
         $graphics.FillRectangle($green,42,$position,22,16)
         $graphics.FillRectangle($green,192,$position,22,16)
     }
-    $trace=New-Object Drawing.Pen([Drawing.Color]::FromArgb(243,249,252),15)
+    $trace=New-Object Drawing.Pen([Drawing.Color]::FromArgb(255,253,250),15)
     $trace.StartCap='Round';$trace.EndCap='Round'
     $graphics.DrawLines($trace,[Drawing.PointF[]]@((New-Object Drawing.PointF(96,103)),(New-Object Drawing.PointF(122,103)),(New-Object Drawing.PointF(122,148)),(New-Object Drawing.PointF(153,148))))
     $graphics.FillEllipse($gold,139,134,29,29)

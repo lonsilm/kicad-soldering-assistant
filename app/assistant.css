@@ -1,27 +1,35 @@
 /* Assembly workspace skin. The upstream renderer and controls remain intact. */
-:root {color-scheme:dark;}
-body,.bom,button,input {font-family:"Segoe UI","Microsoft YaHei UI",sans-serif;}
-body {background:#0b1219;}
-#topmostdiv {--ui-bg:#f3f6f8;--ui-panel:#fff;--ui-raised:#edf2f5;--ui-border:#d9e2e8;--ui-text:#233344;--ui-muted:#718291;--ui-accent:#087d71;--ui-active:#e0f4ef;background:var(--ui-bg);color:var(--ui-text);transition:none;}
-#topmostdiv.dark {--ui-bg:#0c131b;--ui-panel:#111c26;--ui-raised:#172531;--ui-border:#24333f;--ui-text:#deE7ed;--ui-muted:#8295a5;--ui-accent:#68dac0;--ui-active:#1a3b36;--pcb-edge-color:#90a6b3;--pad-color:#a6b4bc;--pad-hole-color:#14212a;--pad-color-highlight:#ffd183;--pad-color-highlight-marked:#60d6ad;--silkscreen-edge-color:#c1b888;--silkscreen-polygon-color:#91ada5;--silkscreen-text-color:#9bc6b8;--fabrication-edge-color:#867a58;--fabrication-polygon-color:#867a58;--fabrication-text-color:#ad9b6c;--track-color:#294239;--zone-color:#294239;background:var(--ui-bg);color:var(--ui-text);}
-* {scrollbar-width:thin;scrollbar-color:#354958 transparent;}
+:root {color-scheme:light;--ui-bg:#faf7f2;--ui-panel:#fffdfa;--ui-raised:#f3eae1;--ui-border:#dfd2c8;--ui-text:#443b38;--ui-muted:#71635d;--ui-accent:#a34a37;--ui-active:#f8e5db;}
+:root[data-theme="blue"] {--ui-bg:#f3f6fa;--ui-panel:#fcfdff;--ui-raised:#e8eff7;--ui-border:#ccd9e8;--ui-text:#34445a;--ui-muted:#596b81;--ui-accent:#3b649d;--ui-active:#e0eaf9;}
+:root[data-theme="lilac"] {--ui-bg:#f8f5fa;--ui-panel:#fffdfe;--ui-raised:#efe8f5;--ui-border:#dcd0e6;--ui-text:#4b3d59;--ui-muted:#715f7e;--ui-accent:#80559d;--ui-active:#efe1f7;}
+body,.bom,button,input,select {font-family:"Segoe UI","Microsoft YaHei UI",sans-serif;}
+body {background:var(--ui-bg);}
+#topmostdiv {background:var(--ui-bg);color:var(--ui-text);transition:none;
+ --pcb-edge-color:#67616a;--pad-color:#8c8290;--pad-hole-color:#fffdfa;--pad-color-highlight:var(--ui-accent);--pad-color-highlight-marked:#6d7098;--pad-color-highlight-both:#c28b40;
+ --silkscreen-edge-color:#7e7893;--silkscreen-polygon-color:#8b8196;--silkscreen-text-color:#66677f;--fabrication-edge-color:#b4a49a;--fabrication-polygon-color:#b4a49a;--fabrication-text-color:#99837a;
+ --track-color:#e2dce5;--zone-color:#e2dce5;--track-color-highlight:var(--ui-accent);--zone-color-highlight:#a34a3744;}
+* {scrollbar-width:thin;scrollbar-color:var(--ui-border) transparent;}
 button {font-size:12px;font-weight:500;cursor:pointer;}
 button:focus-visible,input:focus-visible {outline:2px solid var(--ui-accent);outline-offset:2px;}
 .foc-head {padding:20px 24px 0;flex:0 0 auto;background:var(--ui-panel);}
 .foc-head-row {display:flex;align-items:center;gap:24px;min-height:48px;}
 .foc-identity {display:flex;align-items:center;gap:12px;min-width:0;flex:1;}
-.foc-appmark {display:grid;place-items:center;width:40px;height:40px;border:1px solid #315a51;background:#193c34;color:#80e8c8;border-radius:12px;flex-shrink:0;}
+.foc-appmark {display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--ui-border);background:var(--ui-active);color:var(--ui-accent);border-radius:12px;flex-shrink:0;}
 .foc-appmark svg {width:27px;height:27px;}
-.foc-eyebrow {display:block;font-size:9px;font-weight:600;letter-spacing:1.7px;color:var(--ui-muted);margin-bottom:3px;}
+.foc-eyebrow {display:block;font-size:9px;font-weight:600;letter-spacing:.6px;color:var(--ui-muted);margin-bottom:3px;}
 .foc-project {font-size:21px;font-weight:600;letter-spacing:-.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36vw;}
 .foc-session {display:flex;align-items:center;gap:22px;font-size:12px;white-space:nowrap;}
 .foc-tag {color:var(--ui-muted);}
 .foc-progress {display:flex;align-items:center;gap:12px;font-variant-numeric:tabular-nums;}
 .foc-progress strong {font-size:23px;font-weight:500;color:var(--ui-accent);}
 .foc-progress span {font-size:11px;color:var(--ui-muted);}
+.foc-theme-label {display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ui-muted);white-space:nowrap;}
+#foc-theme {max-width:130px;height:34px;padding:0 25px 0 10px;border:1px solid var(--ui-border);border-radius:9px;background:var(--ui-bg);color:var(--ui-text);font-size:11px;cursor:pointer;}
+#foc-theme:focus-visible {outline:2px solid var(--ui-accent);outline-offset:2px;}
+.menu-label[hidden] {display:none!important;}
 .foc-file-actions {display:flex;gap:7px;}
 .foc-file-actions button {width:auto;height:33px;padding:0 12px;border:1px solid var(--ui-border);border-radius:7px;background:transparent;color:var(--ui-text);}
-.foc-file-actions button:hover {background:var(--ui-raised);border-color:#486557;}
+.foc-file-actions button:hover {background:var(--ui-raised);border-color:var(--ui-accent);}
 .foc-meter {height:2px;background:var(--ui-border);margin-top:18px;overflow:hidden;}
 .foc-meter span {display:block;height:100%;width:0;background:var(--ui-accent);transition:width .2s;}
 #top {display:flex;align-items:center;justify-content:space-between;padding:10px 24px;gap:12px;flex:0 0 auto;background:var(--ui-panel);border-bottom:1px solid var(--ui-border);}
@@ -51,7 +59,7 @@ button:focus-visible,input:focus-visible {outline:2px solid var(--ui-accent);out
 .foc-filterbar {display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:0 13px 11px;}
 .foc-filterbar button {height:26px;width:auto;padding:0 9px;font-size:10px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--ui-muted);font-weight:500;}
 .foc-filterbar button:hover {background:var(--ui-raised);color:var(--ui-text);}
-.foc-filterbar .foc-active {color:var(--ui-accent);background:var(--ui-active);border-color:#365c5066;}
+.foc-filterbar .foc-active {color:var(--ui-accent);background:var(--ui-active);border-color:var(--ui-border);}
 .foc-detail {margin:0 13px 14px;padding:10px 11px;min-height:0;border:1px solid var(--ui-border);border-radius:7px;font-size:10px;color:var(--ui-muted);line-height:1.8;background:var(--ui-bg);}
 .foc-detail-hint {display:inline-block;margin-right:10px;color:var(--ui-text);font-weight:500;}
 .foc-detail.foc-has-selection {border-left:2px solid var(--ui-accent);}
@@ -70,12 +78,12 @@ button:focus-visible,input:focus-visible {outline:2px solid var(--ui-accent);out
 .bom .numCol {width:20px;color:var(--ui-muted);font-size:10px;}
 .bom .quantity {width:31px;}
 .bom .value {width:18%;}
-.bom input[type=checkbox] {appearance:none;width:14px;height:14px;margin:0;border:1px solid #526573;border-radius:4px;vertical-align:middle;background:var(--ui-bg);cursor:pointer;display:inline-grid;place-items:center;}
+.bom input[type=checkbox] {appearance:none;width:14px;height:14px;margin:0;border:1px solid var(--ui-muted);border-radius:4px;vertical-align:middle;background:var(--ui-bg);cursor:pointer;display:inline-grid;place-items:center;}
 .bom input[type=checkbox]:checked {background:var(--ui-accent);border-color:var(--ui-accent);}
-.bom input[type=checkbox]:checked:after {content:'✓';color:#092d23;font-size:11px;line-height:1;}
+.bom input[type=checkbox]:checked:after {content:'✓';color:white;font-size:11px;line-height:1;}
 .bom input[type=checkbox]:indeterminate {border-color:var(--ui-accent);}
 .bom input[type=checkbox]:indeterminate:after {content:'';width:7px;height:2px;background:var(--ui-accent);}
-.bom .bom-checkbox:after {content:'双击可整列勾选或取消';font-size:10px;background:#304a52;padding:5px 8px;z-index:10;}
+.bom .bom-checkbox:after {content:'双击可整列勾选或取消';font-size:10px;background:var(--ui-text);color:var(--ui-panel);padding:5px 8px;z-index:10;}
 .bom .visbtn {filter:none;background-size:16px;width:22px;height:22px;padding:0;opacity:.55;}
 .dark .bom .visbtn {filter:invert(1);}
 .gutter,.dark .gutter {background-color:transparent;background-image:none;position:relative;}
@@ -89,14 +97,14 @@ button:focus-visible,input:focus-visible {outline:2px solid var(--ui-accent);out
 #backcanvas::after {content:'BACK / 背面已镜像';}
 .foc-statusbar {display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;height:29px;padding:0 20px;box-sizing:border-box;font-size:9px;color:var(--ui-muted);border-top:1px solid var(--ui-border);background:var(--ui-panel);}
 .foc-live-dot {display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ui-accent);margin-right:7px;vertical-align:middle;}
-.foc-divider {margin:0 7px;color:#3f535f;}
-.dark .menu-content,.menu-content {background:var(--ui-panel);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:9px;box-shadow:0 16px 48px #0006;padding:10px;max-height:70vh;overflow:auto;font-size:11px!important;top:100%;}
+.foc-divider {margin:0 7px;color:var(--ui-border);}
+.dark .menu-content,.menu-content {background:var(--ui-panel);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:9px;box-shadow:0 12px 32px #443b3818;padding:10px;max-height:70vh;overflow:auto;font-size:11px!important;top:100%;}
 .menu-label {border-color:var(--ui-border)!important;font-size:11px;line-height:1.7;}
 .menu-content .menu-textbox {background:var(--ui-bg);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:4px;font-size:11px;}
 #bomcontrols .menu-content .savebtn {border:1px solid var(--ui-border);background:var(--ui-raised)!important;flex-grow:1;font-size:10px;}
 .stats {font-size:11px;min-width:350px;}
 .stats td,.dark .stats td {border-color:var(--ui-border);padding:8px;}
-mark.highlight,.dark mark.highlight {background:#3d665b;color:#d7fff0;border-radius:3px;padding:1px 3px;}
+mark.highlight,.dark mark.highlight {background:var(--ui-active);color:var(--ui-accent);border-radius:3px;padding:1px 3px;}
 @media(max-width:1100px) {.foc-toolbar-title{display:none}#bomcontrols{gap:7px;width:100%;justify-content:space-between}#bomcontrols button{padding:0 7px}.foc-session{gap:12px}.foc-checked-count{display:none}.foc-head{padding:16px 18px 0}#top{padding:9px 16px}.foc-project{font-size:18px}.foc-head-row{gap:14px}}
 @media(max-width:850px) {.foc-session .foc-tag{display:none}.foc-file-actions button{font-size:10px;padding:0 8px}.foc-progress{gap:8px}.foc-statusbar>span:nth-child(2){display:none}#bomcontrols{gap:5px}#bomcontrols button{font-size:10px;padding:0 5px}.foc-toolbar-title{display:none}.foc-eyebrow{font-size:8px}}
 /* Effective CSS height shrinks on a 1080p screen at 125% or 150% DPI. */

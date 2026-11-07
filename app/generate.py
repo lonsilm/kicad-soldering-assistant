@@ -240,7 +240,7 @@ def build(args):
         config.include_nets = True
         config.show_fabrication = True
         config.highlight_pin1 = 'selected'
-        config.dark_mode = True
+        config.dark_mode = False
         config.checkboxes = '已备料,已焊接,已检查'
         config.mark_when_checked = '已焊接'
         config.bom_view = 'left-right'

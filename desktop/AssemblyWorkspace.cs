@@ -19,6 +19,16 @@ namespace KiCadSolderingAssistant
         readonly LinkLabel install = new LinkLabel { Dock = DockStyle.Bottom, Height = 34, TextAlign = ContentAlignment.MiddleCenter, Text = "安装 Microsoft Edge WebView2 运行时", Visible = false };
         string currentHtml, allowedHost, testBackup, testRestore, testDownloadDirectory;
         bool opening;
+        string theme = "peach", themeScript;
+        internal event Action<string> ThemeChanged;
+        internal async Task SetTheme(string id)
+        {
+            var colors = Palette.Get(id); theme = colors.Id;
+            message.BackColor = view.DefaultBackgroundColor = colors.Background;
+            message.ForeColor = colors.Ink; install.LinkColor = colors.Accent;
+            if (view.CoreWebView2 != null)
+                await view.ExecuteScriptAsync("window.assemblySetTheme && assemblySetTheme(" + Core.Json.Serialize(theme) + ",false)");
+        }
         internal int BlockedRequests;
         internal string TransferError;
         internal AssemblyWorkspace()
@@ -76,6 +86,12 @@ namespace KiCadSolderingAssistant
                         object data = Core.Json.DeserializeObject(json);
                         string command = data as string;
                         var file = data as Dictionary<string, object>;
+                        if (file != null && file.ContainsKey("type") && Convert.ToString(file["type"]) == "assembly.theme" && file.ContainsKey("theme"))
+                        {
+                            theme = Palette.Get(Convert.ToString(file["theme"])).Id;
+                            await SetTheme(theme);
+                            if (ThemeChanged != null) ThemeChanged(theme);
+                        }
                         if (file != null && file.ContainsKey("type") && Convert.ToString(file["type"]) == "assembly.export") Export(file);
                         if (command == "assembly.backup") await Backup();
                         if (command == "assembly.restore") await Restore();
@@ -99,6 +115,8 @@ namespace KiCadSolderingAssistant
                 if (!File.Exists(currentHtml)) throw new FileNotFoundException("装配结果已移动，请重新生成。", currentHtml);
                 Core.UpdatePresentation(currentHtml);
                 await Initialize();
+                if (themeScript != null) view.CoreWebView2.RemoveScriptToExecuteOnDocumentCreated(themeScript);
+                themeScript = await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync("window.assemblyNativeTheme=" + Core.Json.Serialize(theme) + ";");
                 if (allowedHost != null) view.CoreWebView2.ClearVirtualHostNameToFolderMapping(allowedHost);
                 allowedHost = "project-" + Core.Sha(Encoding.UTF8.GetBytes(currentHtml.ToLowerInvariant())).Substring(0, 24) + ".kicad.invalid";
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping(allowedHost, Path.GetDirectoryName(currentHtml), CoreWebView2HostResourceAccessKind.DenyCors);
@@ -264,6 +282,17 @@ namespace KiCadSolderingAssistant
             await Open(original);
             await Check("getStoredCheckboxRefs('已焊接').size===1");
             await Check("document.documentElement.scrollWidth<=innerWidth && assemblyErrors.length===0");
+            foreach (string id in Palette.Ids)
+            {
+                await view.ExecuteScriptAsync("document.getElementById('foc-theme').value=" + Core.Json.Serialize(id) + ";document.getElementById('foc-theme').dispatchEvent(new Event('change'))");
+                await Check("document.getElementById('topmostdiv').dataset.theme===" + Core.Json.Serialize(id));
+                for (int i = 0; theme != id && i < 50; i++) await Task.Delay(100);
+                if (theme != id) throw new InvalidOperationException("工作区主题未通知应用。");
+            }
+            await SetTheme("peach");
+            if (ThemeChanged != null) ThemeChanged("peach");
+            await Open(original);
+            await Check("document.getElementById('topmostdiv').dataset.theme==='peach' && getStoredCheckboxRefs('已焊接').size===1");
             // The hidden test window throttles CSS animations. Freeze transitions only
             // for its diagnostic capture, so a half-finished theme fade is not recorded.
             await view.ExecuteScriptAsync("var captureStyle=document.createElement('style');captureStyle.textContent='*,*::before,*::after{transition:none!important;animation:none!important}';document.head.append(captureStyle)");

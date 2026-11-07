@@ -27,7 +27,7 @@ print(json.dumps(report,ensure_ascii=False))
 # The native application is distributed independently as one executable.
 exe = dist/'KiCad焊接助手.exe'
 if exe.is_file():
-    native = dist/'KiCadSolderingAssistant-v1.3.1-Windows.zip'
+    native = dist/'KiCadSolderingAssistant-v1.4.0-Windows.zip'
     with zipfile.ZipFile(native,'w',compression=zipfile.ZIP_DEFLATED) as z:
         z.write(exe,exe.name)
         z.write(root/'使用说明.md','使用说明.md')

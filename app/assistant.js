@@ -3,6 +3,20 @@
 storagePrefix='KiCad_Soldering__'+ASSEMBLY_META.project_id+'__#';
 pcbdata.metadata.assembly_id=ASSEMBLY_META.project_id;
 const assemblyIndices=new Set(pcbdata.bom.both.flat().map(r=>r[1]));
+const assemblyThemes={peach:'暖白珊瑚',blue:'雾蓝',lilac:'浅紫'};
+// A visual preference is separate from per-project soldering progress.
+const assemblyUpstreamDarkMode=setDarkMode;
+setDarkMode=function(){assemblyUpstreamDarkMode(false);};
+window.assemblySetTheme=function(name,notify=true) {
+  if(!Object.hasOwn(assemblyThemes,name)) name='peach';
+  document.getElementById('topmostdiv').dataset.theme=name;
+  document.documentElement.dataset.theme=name;
+  try {localStorage.setItem('assembly.theme.v2',name);} catch {}
+  const select=document.getElementById('foc-theme');if(select) select.value=name;
+  document.getElementById('darkmodeCheckbox').checked=false;
+  setDarkMode(false);
+  if(notify && window.chrome?.webview) chrome.webview.postMessage({type:'assembly.theme',theme:name});
+};
 const upstreamWriteStorage=writeStorage;
 function assemblyRefString(value) {
   return String(value||'').split(',').filter(Boolean).map(ref=>{
@@ -70,6 +84,10 @@ window.addEventListener('load', function () {
     for (const child of root.childNodes) translate(child);
   }
   const wrapper=document.getElementById('topmostdiv');
+  let savedTheme;try {savedTheme=localStorage.getItem('assembly.theme.v2');} catch {}
+  // Migrate old dark-mode settings to the new default, retaining progress.
+  assemblySetTheme(window.assemblyNativeTheme||savedTheme||'peach',false);
+  document.getElementById('darkmodeCheckbox').closest('label').hidden=true;
   if (readStorage('assemblyUiDefaultsV1')===null) {
     document.getElementById('valuesCheckbox').checked=false;
     valuesVisible(false);
@@ -81,7 +99,7 @@ window.addEventListener('load', function () {
   const header=document.createElement('div'); header.className='foc-head';
   header.innerHTML='<div class="foc-head-row"><div class="foc-identity"><span class="foc-appmark" aria-hidden="true">'+
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/><path d="m10 12 1.5 1.5L14 10"/></svg></span>'+
-    '<div><span class="foc-eyebrow">ASSEMBLY WORKSPACE</span><div class="foc-project"></div></div></div>'+
+    '<div><span class="foc-eyebrow">我的装配工作台</span><div class="foc-project"></div></div></div>'+
     '<div class="foc-session"><span class="foc-tag">'+total+' 个器件</span><span class="foc-progress" id="foc-progress"></span></div>'+
     '<div class="foc-file-actions"><button id="foc-export" type="button">备份进度</button>'+
     '<button id="foc-import" type="button">恢复进度</button></div></div>'+
@@ -124,6 +142,11 @@ window.addEventListener('load', function () {
   const topControls=document.getElementById('bomcontrols');
   for(const id of ['bom-grouped-btn','lr-btn','fl-btn']) topControls.append(document.getElementById(id).parentElement);
   for(const cls of ['statsbtn','iobtn','menubtn']) topControls.append(document.querySelector('.'+cls).parentElement);
+  const themeLabel=document.createElement('label');themeLabel.className='foc-theme-label';themeLabel.textContent='主题';
+  const themeSelect=document.createElement('select');themeSelect.id='foc-theme';themeSelect.setAttribute('aria-label','界面主题');
+  for(const [id,name] of Object.entries(assemblyThemes)) {const option=document.createElement('option');option.value=id;option.textContent=name;themeSelect.append(option);}
+  themeSelect.value=wrapper.dataset.theme;themeSelect.onchange=()=>assemblySetTheme(themeSelect.value);
+  themeLabel.append(themeSelect);topControls.append(themeLabel);
   const searchRow=document.getElementById('reflookup').parentElement;searchRow.className='foc-searchrow';
   document.getElementById('reflookup').placeholder='搜索位号，如 R51';
   document.getElementById('filter').placeholder='参数、封装或料号';

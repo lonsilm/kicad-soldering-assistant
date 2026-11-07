@@ -68,14 +68,14 @@ run([compiler,'/nologo','/target:winexe','/platform:anycpu','/optimize+',
     '/r:'+str(sdk/'Microsoft.Web.WebView2.Core.dll'),'/r:'+str(sdk/'Microsoft.Web.WebView2.WinForms.dll'),
     '/r:System.IO.Compression.dll','/r:System.IO.Compression.FileSystem.dll','/r:System.Web.Extensions.dll',
     '/resource:'+str(payload)+',Runtime.zip','/win32icon:'+str(ASSETS/'app.ico'),
-    '/win32manifest:'+str(ROOT/'desktop/app.manifest'),'/out:'+str(exe),ROOT/'desktop/Program.cs',ROOT/'desktop/AssemblyWorkspace.cs'])
+    '/win32manifest:'+str(ROOT/'desktop/app.manifest'),'/out:'+str(exe),ROOT/'desktop/Program.cs',ROOT/'desktop/AssemblyWorkspace.cs',ROOT/'desktop/Palette.cs'])
 data=exe.read_bytes()
 assert data[:2]==b'MZ'
 pe=struct.unpack_from('<I',data,0x3c)[0]
 assert data[pe:pe+4]==b'PE\0\0'
 subsystem=struct.unpack_from('<H',data,pe+24+68)[0]
 assert subsystem==2,'EXE must be a GUI application, without console'
-report=dict(version='1.3.1',exe=str(exe),bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),
+report=dict(version='1.4.0',exe=str(exe),bytes=len(data),sha256=hashlib.sha256(data).hexdigest(),
     subsystem='Windows GUI',single_file=True,payload_files=len(entries),
     payload_sha256=hashlib.sha256(payload.read_bytes()).hexdigest(),
     requires='Windows 10/11 with .NET Framework 4.8; WebView2 Runtime; installed KiCad for generation',
