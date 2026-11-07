@@ -99,5 +99,18 @@ button:focus-visible,input:focus-visible {outline:2px solid var(--ui-accent);out
 mark.highlight,.dark mark.highlight {background:#3d665b;color:#d7fff0;border-radius:3px;padding:1px 3px;}
 @media(max-width:1100px) {.foc-toolbar-title{display:none}#bomcontrols{gap:7px;width:100%;justify-content:space-between}#bomcontrols button{padding:0 7px}.foc-session{gap:12px}.foc-checked-count{display:none}.foc-head{padding:16px 18px 0}#top{padding:9px 16px}.foc-project{font-size:18px}.foc-head-row{gap:14px}}
 @media(max-width:850px) {.foc-session .foc-tag{display:none}.foc-file-actions button{font-size:10px;padding:0 8px}.foc-progress{gap:8px}.foc-statusbar>span:nth-child(2){display:none}#bomcontrols{gap:5px}#bomcontrols button{font-size:10px;padding:0 5px}.foc-toolbar-title{display:none}.foc-eyebrow{font-size:8px}}
+/* Effective CSS height shrinks on a 1080p screen at 125% or 150% DPI. */
+@media(max-height:700px) {
+ .foc-head{padding:12px 18px 0}.foc-head-row{min-height:38px;gap:14px}.foc-appmark{width:34px;height:34px;border-radius:9px}.foc-appmark svg{width:23px;height:23px}
+ .foc-eyebrow{font-size:8px;margin-bottom:2px}.foc-project{font-size:18px}.foc-progress strong{font-size:20px}.foc-meter{margin-top:11px}
+ #top{padding:7px 18px}#bot{padding:10px 12px}.foc-pane-heading{padding:11px 13px 8px}.foc-searchrow{padding-bottom:7px}.foc-filterbar{padding-bottom:8px}
+ .foc-detail:not(.foc-has-selection){display:none}.foc-detail{margin-bottom:9px;padding:7px 9px}.bom td,.dark .bom td{padding-top:6px;padding-bottom:6px}.bom th,.dark .bom th{padding-top:7px;padding-bottom:7px}
+ .foc-statusbar{height:25px}
+}
+@media(max-width:760px) {
+ .foc-head-row{flex-wrap:wrap;gap:8px}.foc-identity{min-width:45%;}.foc-project{max-width:65vw}.foc-session{margin-left:auto}.foc-file-actions{margin-left:auto}
+ #bomcontrols{justify-content:flex-start;gap:5px}#bomcontrols .button-container{padding:2px}#bomcontrols button{font-size:10px;padding:0 5px;height:26px}#bomcontrols .menu>button{height:31px}
+ .foc-statusbar{font-size:8px;padding:0 12px}.foc-checked-count{display:none}
+}
 @media(prefers-reduced-motion:reduce) {*,*::before,*::after {transition:none!important;}}
 @media print {.foc-head,.foc-statusbar,.foc-searchrow,.foc-filterbar,#top {display:none!important;}#bot{padding:0}.bom th,.bom td {color:#111!important;border-bottom:1px solid #ccc!important;background:white!important;}}

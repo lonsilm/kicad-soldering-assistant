@@ -19,8 +19,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("离线 PCB 装配定位与焊接进度助手")]
 [assembly: AssemblyCompany("KiCad Soldering Assistant contributors")]
 [assembly: AssemblyProduct("KiCad 焊接助手")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyFileVersion("1.3.1.0")]
 
 namespace KiCadSolderingAssistant
 {
@@ -412,6 +412,13 @@ namespace KiCadSolderingAssistant
         readonly Panel assembly = new Panel { Dock = DockStyle.Fill };
         Button homeNav, assemblyNav;
         AssemblyWorkspace workspace;
+        Panel sidebar, heading, navigation;
+        TableLayoutPanel body, shell;
+        Label headingTitle, headingSubtitle, formats;
+        float uiScale = 1F;
+        bool adaptiveReady, reflowing;
+        readonly Dictionary<Control, Font> logicalFonts = new Dictionary<Control, Font>();
+        int Unit(float value) { return Math.Max(1, (int)Math.Round(value * uiScale)); }
 
         internal MainForm(Preferences prefs)
         {
@@ -419,12 +426,12 @@ namespace KiCadSolderingAssistant
             Text = "KiCad 焊接助手";
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Microsoft YaHei UI", 13.333F, FontStyle.Regular, GraphicsUnit.Pixel);
-            AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(1120, 860); MinimumSize = new Size(1000, 840);
+            AutoScaleMode = AutoScaleMode.None; // Explicit per-monitor scaling is shared with the layout checks.
+            ClientSize = new Size(1100, 760);
             StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(12, 19, 27);
             AllowDrop = true;
 
-            var sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Color.FromArgb(15, 26, 36) };
+            sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Color.FromArgb(15, 26, 36) };
             Controls.Add(sidebar);
             var logo = new PictureBox { Image = Icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Bounds = new Rectangle(26, 32, 50, 50) };
             sidebar.Controls.Add(logo);
@@ -432,10 +439,11 @@ namespace KiCadSolderingAssistant
             sidebar.Controls.Add(Label("KICAD ASSEMBLY\n\nPCB 装配工作台", new Rectangle(27, 156, 170, 85), 10, Color.FromArgb(111, 137, 155), false));
             string[] steps = { "01    选择工程", "02    定位与取料", "03    记录焊接进度" };
             for (int i = 0; i < steps.Length; i++) sidebar.Controls.Add(Label(steps[i], new Rectangle(27, 316 + 51*i, 180, 30), 11, i == 0 ? Color.FromArgb(112, 227, 191) : Color.FromArgb(117, 142, 161), i == 0));
-            var foot = Label("离线使用  ·  工程只读\nv1.3.0", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(92, 119, 138), false);
+            var foot = Label("离线使用  ·  工程只读\nv1.3.1", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(92, 119, 138), false);
             foot.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; sidebar.Controls.Add(foot);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(32, 28, 32, 24), ColumnCount = 1, RowCount = 8 };
+            body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(32, 28, 32, 24), ColumnCount = 1, RowCount = 8 };
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 186));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 83));
@@ -445,28 +453,30 @@ namespace KiCadSolderingAssistant
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             Controls.Add(body); body.BringToFront();
-            var heading = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            heading.Controls.Add(Label("开始装配", new Rectangle(0, 0, 540, 40), 23, Ink, true));
-            heading.Controls.Add(Label("打开工程，板图、物料和进度尽在一处。", new Rectangle(2, 47, 620, 28), 10, Muted, false));
+            heading = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+            headingTitle = Label("开始装配", new Rectangle(0, 0, 540, 40), 23, Ink, true);
+            headingSubtitle = Label("打开工程，板图、物料和进度尽在一处。", new Rectangle(2, 47, 620, 28), 10, Muted, false);
+            headingTitle.AutoEllipsis = headingSubtitle.AutoEllipsis = true;
+            heading.Controls.Add(headingTitle); heading.Controls.Add(headingSubtitle);
             body.Controls.Add(heading, 0, 0);
 
             drop.Dock = DockStyle.Fill; drop.Margin = new Padding(0, 0, 0, 4); drop.AllowDrop = true;
-            dropTitle = Label("将 KiCad 工程拖到这里", new Rectangle(30, 24, 580, 38), 18, Ink, true);
+            dropTitle = Label("将 KiCad 工程拖到这里", new Rectangle(30, 24, 580, 38), 17, Ink, true);
             dropTitle.TextAlign = ContentAlignment.MiddleCenter;
-            var formats = Label("文件夹  ·  .kicad_pro  ·  .kicad_pcb  ·  根原理图", new Rectangle(20, 71, 600, 25), 10, Muted, false);
+            formats = Label("文件夹  ·  .kicad_pro  ·  .kicad_pcb  ·  根原理图", new Rectangle(20, 71, 600, 25), 10, Muted, false);
             formats.TextAlign = ContentAlignment.MiddleCenter;
             drop.Controls.Add(dropTitle); drop.Controls.Add(formats);
             chooseFile = Button("选择文件", true); chooseFile.Size = new Size(124, 37);
             chooseFolder = Button("选择文件夹", false); chooseFolder.Size = new Size(124, 37);
             drop.Controls.Add(chooseFile); drop.Controls.Add(chooseFolder);
-            drop.Resize += delegate { dropTitle.SetBounds(12, 26, drop.Width-24, 38); formats.SetBounds(12, 72, drop.Width-24, 25); chooseFile.Location = new Point(drop.Width/2-130, 117); chooseFolder.Location = new Point(drop.Width/2+6, 117); };
+            drop.Resize += delegate { LayoutDrop(); };
             chooseFile.Click += async delegate { await PickFile(); };
             chooseFolder.Click += async delegate { using (var dialog = new FolderBrowserDialog { Description = "选择包含 PCB 的工程文件夹" }) if (dialog.ShowDialog(this) == DialogResult.OK) await GenerateInput(dialog.SelectedPath); };
             body.Controls.Add(drop, 0, 1);
 
-            var status = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 9, 0, 8), BackColor = Color.FromArgb(20, 43, 39) };
-            statusTitle.SetBounds(16, 10, 620, 23); statusTitle.Font = new Font(Font, FontStyle.Bold); statusTitle.ForeColor = Accent;
-            statusDetail.SetBounds(16, 35, 620, 23); statusDetail.ForeColor = Muted; statusDetail.AutoEllipsis = true;
+            var status = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 6, 0, 6), BackColor = Color.FromArgb(20, 43, 39) };
+            statusTitle.SetBounds(16, 7, 620, 22); statusTitle.Font = new Font(Font, FontStyle.Bold); statusTitle.ForeColor = Accent;
+            statusDetail.SetBounds(16, 31, 620, 22); statusDetail.ForeColor = Muted; statusDetail.AutoEllipsis = true;
             statusTitle.Anchor = statusDetail.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             status.Controls.Add(statusTitle); status.Controls.Add(statusDetail);
             progress.SetBounds(0, 0, 10, 3); progress.Dock = DockStyle.Bottom; progress.Style = ProgressBarStyle.Marquee; progress.MarqueeAnimationSpeed = 26; progress.Visible = false; status.Controls.Add(progress);
@@ -493,7 +503,7 @@ namespace KiCadSolderingAssistant
             var recentHeader = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
             recentHeader.Controls.Add(Label("继续上次的装配", new Rectangle(0, 5, 200, 25), 10, Ink, true));
             var toggleLog = new LinkLabel { Text = "显示日志", AutoSize = true, Location = new Point(540, 6), LinkColor = Accent, Anchor = AnchorStyles.Top | AnchorStyles.Right };
-            recentHeader.Controls.Add(toggleLog); recentHeader.Resize += delegate { toggleLog.Left = recentHeader.Width-toggleLog.Width; };
+            recentHeader.Controls.Add(toggleLog); recentHeader.Resize += delegate { toggleLog.Left = Math.Max(0, recentHeader.Width-toggleLog.Width-Unit(2)); };
             body.Controls.Add(recentHeader, 0, 5);
             var listArea = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
             recent.Dock = DockStyle.Fill; recent.BorderStyle = BorderStyle.None; recent.BackColor = Color.FromArgb(17, 28, 38); recent.ForeColor = Ink; recent.ItemHeight = 29; recent.DrawMode = DrawMode.OwnerDrawFixed;
@@ -518,9 +528,9 @@ namespace KiCadSolderingAssistant
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if (Busy) { e.Cancel = true; SetStatus("工程仍在生成", "请等生成完成后再关闭窗口。", false); } };
             // Keep project selection and assembly in the same native window.
             Controls.Remove(sidebar); Controls.Remove(body);
-            home.Controls.Add(sidebar); home.Controls.Add(body); body.BringToFront();
+            home.AutoScroll = true; home.Controls.Add(sidebar); home.Controls.Add(body); body.BringToFront();
             pages.Dock = DockStyle.Fill; pages.Margin = new Padding(0); pages.Controls.Add(home); pages.Controls.Add(assembly);
-            var navigation = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(16, 9, 16, 9), BackColor = Color.FromArgb(15, 26, 36) };
+            navigation = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(16, 9, 16, 9), BackColor = Color.FromArgb(15, 26, 36) };
             navigation.Controls.Add(Label("KiCad  /  焊接助手", new Rectangle(23, 17, 250, 24), 10, Ink, true));
             var navButtons = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 250, FlowDirection = FlowDirection.LeftToRight, BackColor = navigation.BackColor };
             homeNav = Button("工程", false); homeNav.Size = new Size(90, 34);
@@ -528,11 +538,162 @@ namespace KiCadSolderingAssistant
             navButtons.Controls.Add(homeNav); navButtons.Controls.Add(assemblyNav); navigation.Controls.Add(navButtons);
             homeNav.Click += delegate { ShowPage(home); };
             assemblyNav.Click += delegate { if (workspace != null) ShowPage(assembly); else SetStatus("先打开一个工程", "选择工程后即可进入焊接工作区。", false); };
-            var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
+            shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
+            shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             navigation.Dock = DockStyle.Fill; navigation.Margin = new Padding(0); shell.Controls.Add(navigation, 0, 0); shell.Controls.Add(pages, 0, 1);
             Controls.Add(shell); ShowPage(home);
+            Resize += delegate { if (adaptiveReady) Reflow(); };
+            home.Resize += delegate { if (adaptiveReady) Reflow(); };
+            ResizeEnd += delegate { if (adaptiveReady) FitWindow(Screen.FromHandle(Handle).WorkingArea, false); };
+            heading.Resize += delegate { if (adaptiveReady) LayoutHeading(); };
+            CaptureFonts(this); adaptiveReady = true;
             UpdateRecent(); SetStatus("准备就绪", "先保存 PCB，再拖入工程。源文件保持只读。", false);
+        }
+        void CaptureFonts(Control root)
+        {
+            logicalFonts[root] = (Font)root.Font.Clone();
+            foreach (Control child in root.Controls) CaptureFonts(child);
+        }
+        internal void ApplyDpi(int dpi)
+        {
+            float next = Math.Max(0.75F, Math.Min(4F, dpi / 96F));
+            if (Math.Abs(next - uiScale) < 0.001F) return;
+            SuspendLayout(); reflowing = true; MinimumSize = Size.Empty;
+            float ratio = next / uiScale;
+            uiScale = next;
+            Scale(new SizeF(ratio, ratio));
+            foreach (var pair in logicalFonts)
+            {
+                Font f = pair.Value;
+                pair.Key.Font = new Font(f.FontFamily, f.Size * next, f.Style, f.Unit);
+            }
+            recent.ItemHeight = Unit(29);
+            ResumeLayout(true); reflowing = false;
+            Reflow();
+        }
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
+        internal int WindowDpi()
+        {
+            try { uint dpi = GetDpiForWindow(Handle); if (dpi > 0) return (int)dpi; } catch { }
+            using (var graphics = CreateGraphics()) return (int)Math.Round(graphics.DpiX);
+        }
+        protected override void OnShown(EventArgs e)
+        {
+            ApplyDpi(WindowDpi());
+            FitWindow(Screen.FromHandle(Handle).WorkingArea, true);
+            base.OnShown(e);
+        }
+        internal void FitWindow(Rectangle area, bool initial)
+        {
+            // WorkingArea already excludes the taskbar. These are physical pixels.
+            MinimumSize = new Size(Math.Min(Unit(760), (int)(area.Width * .80)), Math.Min(Unit(480), (int)(area.Height * .75)));
+            if (WindowState != FormWindowState.Normal) return;
+            int width = initial ? Math.Min(Unit(1100), (int)(area.Width * .92)) : Math.Min(Width, area.Width);
+            int height = initial ? Math.Min(Unit(800), (int)(area.Height * .96)) : Math.Min(Height, area.Height);
+            int x = initial ? area.Left + (area.Width-width)/2 : Math.Max(area.Left, Math.Min(Left, area.Right-width));
+            int y = initial ? area.Top + (area.Height-height)/2 : Math.Max(area.Top, Math.Min(Top, area.Bottom-height));
+            Bounds = new Rectangle(x,y,width,height);
+            Reflow();
+        }
+        void LayoutHeading()
+        {
+            bool compact = home.ClientSize.Height / uiScale < 680;
+            headingTitle.SetBounds(0,0,Math.Max(1,heading.Width),Unit(44));
+            headingSubtitle.SetBounds(0,Unit(compact ? 45 : 47),Math.Max(1,heading.Width),Unit(22));
+        }
+        void LayoutDrop()
+        {
+            if (dropTitle == null || formats == null || chooseFile == null) return;
+            int width = drop.ClientSize.Width, height = drop.ClientSize.Height;
+            int buttonY = Math.Max(Unit(77), height - Unit(45));
+            dropTitle.SetBounds(Unit(12), Unit(12), Math.Max(1,width-Unit(24)), Unit(32));
+            formats.SetBounds(Unit(12), Unit(49), Math.Max(1,width-Unit(24)), Unit(22));
+            int gap = Unit(10), buttonWidth = Unit(124);
+            chooseFile.SetBounds((width-buttonWidth*2-gap)/2, buttonY, buttonWidth, Unit(33));
+            chooseFolder.SetBounds(chooseFile.Right+gap, buttonY, buttonWidth, Unit(33));
+        }
+        internal void Reflow()
+        {
+            if (!adaptiveReady || reflowing) return;
+            reflowing = true;
+            try
+            {
+                bool compact = home.ClientSize.Height / uiScale < 680;
+                bool showSidebar = home.ClientSize.Width / uiScale >= 980 && !compact;
+                sidebar.Visible = showSidebar;
+                sidebar.Width = Unit(224);
+                int pad = compact ? 16 : 26;
+                body.Padding = new Padding(Unit(pad),Unit(compact ? 12 : 20),Unit(pad),Unit(compact ? 12 : 20));
+                float[] heights = compact ? new float[] {70,122,68,40,40,28,0,40} : new float[] {74,158,78,44,44,32,0,44};
+                for (int i = 0; i < heights.Length; i++)
+                    if (i != 6) body.RowStyles[i].Height = Unit(heights[i]);
+                int contentHeight = Math.Max(home.ClientSize.Height, Unit(compact ? 572 : 664));
+                body.MinimumSize = Size.Empty; body.Dock = DockStyle.None; sidebar.Dock = DockStyle.None;
+                home.AutoScrollMinSize = new Size(0, contentHeight);
+                int sideWidth = showSidebar ? Unit(224) : 0;
+                Point scroll = home.AutoScrollPosition;
+                sidebar.SetBounds(scroll.X,scroll.Y,sideWidth,contentHeight);
+                body.SetBounds(sideWidth+scroll.X,scroll.Y,Math.Max(1,home.ClientSize.Width-sideWidth),contentHeight);
+                shell.RowStyles[0].Height = Unit(54);
+                LayoutHeading(); LayoutDrop();
+            }
+            finally { reflowing = false; }
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        struct DpiRect { internal int Left, Top, Right, Bottom; }
+        protected override void WndProc(ref Message message)
+        {
+            const int WM_DPICHANGED = 0x02E0;
+            bool changed = message.Msg == WM_DPICHANGED && adaptiveReady;
+            DpiRect suggested = changed ? (DpiRect)Marshal.PtrToStructure(message.LParam, typeof(DpiRect)) : new DpiRect();
+            base.WndProc(ref message);
+            if (changed)
+            {
+                int dpi = (int)((long)message.WParam & 0xffff);
+                ApplyDpi(dpi);
+                Bounds = Rectangle.FromLTRB(suggested.Left,suggested.Top,suggested.Right,suggested.Bottom);
+                FitWindow(Screen.FromHandle(Handle).WorkingArea, false);
+            }
+        }
+        internal Dictionary<string, object> CheckLayout(Rectangle area, int dpi, string screenshot, bool compactWindow = false)
+        {
+            WindowState = FormWindowState.Normal;
+            ShowPage(home); home.AutoScrollPosition = Point.Empty; ApplyDpi(dpi); FitWindow(area, true);
+            if (compactWindow) Size = new Size(Math.Min(Unit(780),(int)(area.Width*.90)),Math.Min(Unit(520),(int)(area.Height*.90)));
+            PerformLayout(); Reflow();
+            ShowPage(assembly); Reflow(); ShowPage(home);
+            if (sidebar.Visible && body.Left < sidebar.Right) throw new InvalidOperationException("切回工程页后侧栏与内容重叠。");
+            foreach (Control control in new[] { shell, pages, home, body, heading, drop, navigation }) control.PerformLayout();
+            LayoutDrop(); LayoutHeading();
+            var checks = new List<object>();
+            if (!area.Contains(Bounds)) throw new InvalidOperationException("启动窗口超出可用桌面：" + Bounds + " / " + area);
+            foreach (Button button in new[] { chooseFile,chooseFolder,pythonButton,outputButton,openButton,folderButton,homeNav,assemblyNav })
+            {
+                Size text = TextRenderer.MeasureText(button.Text, button.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+                if (text.Width > button.ClientSize.Width-Unit(6) || text.Height > button.ClientSize.Height)
+                    throw new InvalidOperationException("按钮文字被裁切：" + button.Text + " text=" + text + " control=" + button.ClientSize + " dpi=" + dpi);
+                Rectangle box = RectangleToClient(button.RectangleToScreen(button.ClientRectangle));
+                // On a short desktop, the startup page may scroll. Navigation and
+                // file selection must be visible immediately; the rest stay reachable.
+                bool required = button == homeNav || button == assemblyNav || button == chooseFile || button == chooseFolder;
+                if ((button == homeNav || button == assemblyNav) && !button.Parent.ClientRectangle.Contains(button.Bounds))
+                    throw new InvalidOperationException("工具栏内按钮被裁切：" + button.Text + " " + button.Bounds + " parent=" + button.Parent.ClientRectangle + " dpi=" + dpi);
+                if (required && !ClientRectangle.Contains(box)) throw new InvalidOperationException("启动操作超出窗口：" + button.Text + " " + box + " dpi=" + dpi + " window=" + Bounds + " client=" + ClientSize + " area=" + area);
+                checks.Add(new { text = button.Text, bounds = box.ToString(), text_size = text.ToString(), visible_at_start = ClientRectangle.Contains(box) });
+            }
+            if (home.VerticalScroll.Visible)
+            {
+                home.ScrollControlIntoView(openButton);
+                Rectangle reachable = RectangleToClient(openButton.RectangleToScreen(openButton.ClientRectangle));
+                if (!ClientRectangle.Contains(reachable)) throw new InvalidOperationException("小屏幕下无法滚动到启动页操作按钮。");
+                home.AutoScrollPosition = Point.Empty;
+            }
+            Size title = TextRenderer.MeasureText(headingTitle.Text, headingTitle.Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+            if (title.Height > headingTitle.Height) throw new InvalidOperationException("启动标题被裁切：dpi=" + dpi + " text=" + title + " bounds=" + headingTitle.Bounds + " font=" + headingTitle.Font);
+            using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(0,0,Width,Height)); bitmap.Save(screenshot); }
+            return new Dictionary<string, object> { {"dpi",dpi},{"working_area",area.ToString()},{"window",Bounds.ToString()},{"client",ClientSize.ToString()},
+                {"sidebar",sidebar.Visible},{"home_scroll",home.VerticalScroll.Visible},{"buttons",checks},{"screenshot",screenshot} };
         }
         Label Label(string text, Rectangle rect, float size, Color color, bool bold)
         {
@@ -546,6 +707,7 @@ namespace KiCadSolderingAssistant
         {
             home.Visible = page == home; assembly.Visible = page == assembly;
             page.BringToFront();
+            if (adaptiveReady) Reflow();
             if (homeNav != null) { ((AppButton)homeNav).Active = page == home; homeNav.Invalidate(); }
             if (assemblyNav != null) { ((AppButton)assemblyNav).Active = page == assembly; assemblyNav.Invalidate(); }
         }
@@ -555,6 +717,11 @@ namespace KiCadSolderingAssistant
         {
             base.OnHandleCreated(e);
             try { int dark = 1; DwmSetWindowAttribute(Handle, 20, ref dark, 4); } catch { }
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) foreach (var font in logicalFonts.Values) font.Dispose();
+            base.Dispose(disposing);
         }
         void AttachDrop(Control control)
         {
@@ -677,10 +844,11 @@ namespace KiCadSolderingAssistant
         static int Main(string[] args)
         {
             bool test = Array.IndexOf(args, "--self-test") >= 0;
+            bool layoutTest = Array.IndexOf(args, "--layout-test") >= 0;
             string testRoot = Option(args, "--test-root");
-            if (test && String.IsNullOrWhiteSpace(testRoot)) return 2;
-            Core.DataRoot = test ? Path.GetFullPath(testRoot) : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KiCadSolderingAssistant");
-            string report = Path.Combine(Core.DataRoot, "SELF_TEST.json");
+            if ((test || layoutTest) && String.IsNullOrWhiteSpace(testRoot)) return 2;
+            Core.DataRoot = (test || layoutTest) ? Path.GetFullPath(testRoot) : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KiCadSolderingAssistant");
+            string report = Path.Combine(Core.DataRoot, layoutTest ? "LAYOUT_TEST.json" : "SELF_TEST.json");
             try
             {
                 Directory.CreateDirectory(Core.DataRoot); Core.RuntimeRoot = Core.ExtractRuntime();
@@ -697,11 +865,24 @@ namespace KiCadSolderingAssistant
                 {
                     int exitCode = 0;
                     form.SelfTest = test;
-                    if (test) { form.Opacity = 0; form.ShowInTaskbar = false; }
+                    if (test || layoutTest) { form.Opacity = 0; form.ShowInTaskbar = false; }
                     form.Shown += async delegate
                     {
                         try
                         {
+                            if (layoutTest)
+                            {
+                                var layouts = new List<object>();
+                                foreach (var area in new[] { new Rectangle(0,0,1920,1040),new Rectangle(0,0,1366,728),new Rectangle(1920,0,2560,1400),new Rectangle(0,0,3840,2080) })
+                                foreach (int dpi in new[] {96,120,144,192})
+                                {
+                                    string name = "home-" + area.Width + "x" + area.Height + "-" + dpi + "dpi.png";
+                                    layouts.Add(form.CheckLayout(area,dpi,Path.Combine(Core.DataRoot,name)));
+                                }
+                                foreach (int dpi in new[] {96,144}) layouts.Add(form.CheckLayout(new Rectangle(0,0,1920,1040),dpi,Path.Combine(Core.DataRoot,"home-resized-"+dpi+"dpi.png"),true));
+                                File.WriteAllText(report, Core.Json.Serialize(new { passed = true, layouts = layouts, actual_window_dpi = form.WindowDpi(), scaling = "same explicit per-monitor layout routine used by the application" }), new UTF8Encoding(false));
+                                return;
+                            }
                             await form.DetectRuntime();
                             if (test)
                             {
@@ -724,17 +905,17 @@ namespace KiCadSolderingAssistant
                         catch (Exception ex)
                         {
                             exitCode = 1;
-                            if (test) File.WriteAllText(report, Core.Json.Serialize(new { passed = false, error = ex.ToString() }), new UTF8Encoding(false));
+                            if (test || layoutTest) File.WriteAllText(report, Core.Json.Serialize(new { passed = false, error = ex.ToString() }), new UTF8Encoding(false));
                             else form.SetStatus("启动时遇到问题", ex.Message, true);
                         }
-                        finally { if (test) { form.Busy = false; form.Close(); } }
+                        finally { if (test || layoutTest) { form.Busy = false; form.Close(); } }
                     };
                     Application.Run(form); return exitCode;
                 }
             }
             catch (Exception ex)
             {
-                if (test) { Directory.CreateDirectory(Core.DataRoot); File.WriteAllText(report, Core.Json.Serialize(new { passed = false, error = ex.ToString() }), new UTF8Encoding(false)); }
+                if (test || layoutTest) { Directory.CreateDirectory(Core.DataRoot); File.WriteAllText(report, Core.Json.Serialize(new { passed = false, error = ex.ToString() }), new UTF8Encoding(false)); }
                 else MessageBox.Show("焊接助手启动失败：\n" + ex.Message, "KiCad 焊接助手", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }

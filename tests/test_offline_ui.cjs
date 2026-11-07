@@ -42,7 +42,7 @@ async function main(){
     await page.locator('#fb-btn').click();await page.getByRole('button',{name:'全部',exact:true}).click();
     // Check the redesigned panes at actual desktop viewport sizes. In particular,
     // prevent split-gutter styling from wrapping the entire PCB below the BOM.
-    for(const viewport of [{width:1024,height:768},{width:1280,height:800},{width:1920,height:1080}]) {
+    for(const viewport of [{width:960,height:465},{width:1280,height:636},{width:1536,height:794},{width:1024,height:768},{width:1280,height:800},{width:1920,height:1080}]) {
       await page.setViewportSize(viewport);
       for(const [id,layout] of [['lr-btn','left-right'],['tb-btn','top-bottom']]) {
         await page.locator('#'+id).click();
@@ -69,7 +69,7 @@ async function main(){
     assert.deepEqual(errors,[]);assert.deepEqual(network,[]);
     fs.writeFileSync(path.join(results,'OFFLINE_UI_VALIDATION.json'),JSON.stringify({passed:true,
       assembly_count:refs.length,checks:['actual PCB reference set','reference lookup and highlight','reference-based progress',
-      'reload persistence','backup and restore','front/back','1024/1280/1920 viewport sizes','left/right and top/bottom pane geometry','light/dark contrast','keyboard focus','zero external requests'],errors,network},null,2));
+      'reload persistence','backup and restore','front/back','1080p effective viewport at 100/125/150/200 percent scale','1024/1280/1920 viewport sizes','left/right and top/bottom pane geometry','light/dark contrast','keyboard focus','zero external requests'],errors,network},null,2));
     fs.unlinkSync(backup);console.log('PASS: generated offline HTML, highlight, persistence, backup/restore, front/back, no external requests');
   }finally{await browser.close();}
 }

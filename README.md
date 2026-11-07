@@ -12,6 +12,10 @@
 
 **系统要求：Windows 10/11、.NET Framework 4.8、Microsoft Edge WebView2 Runtime，以及已安装的 KiCad（含其自带 Python）。** 已用 KiCad 10.0.6 验证；不承诺所有旧版本格式。工作区使用 WebView2 内嵌渲染；多数 Windows 电脑已安装该运行时，缺少时应用会显示安装入口。生成好的 HTML 仍可作为可选离线分享文件，无需 KiCad。
 
+## v1.3.1 屏幕适配
+
+启动窗口按当前显示器的可用桌面与 Windows DPI 缩放选择大小；空间不足时收起侧栏并使用紧凑布局，小屏幕可滚动访问全部启动操作。移动到不同缩放的显示器时重新排版，焊接工具栏也会根据实际可用高度收紧。
+
 ## v1.3 界面
 
 启动页和焊接工作区采用统一的石墨深色与青绿色强调色；文字工具栏、分段视图切换、进度百分比、紧凑物料表和正反面板图卡片取代原先的大图标布局。仍可在显示设置中切换明暗主题。
@@ -48,6 +52,7 @@ python desktop/build_exe.py
 ```powershell
 & 'C:\Program Files\KiCad\10.0\bin\python.exe' -X utf8 tests/test_backend.py
 & 'C:\Program Files\KiCad\10.0\bin\python.exe' -X utf8 tests/test_desktop.py
+python tests/test_window_layout.py
 ```
 
 测试仅在 `tests/fixtures` 写入明确新建的合成板，验证不焊件排除、特殊字符路径、多板选择、同名工程隔离，以及单 EXE 复制运行、损坏缓存恢复。可选设置 `KICAD_TEST_BOARD` 对本机真实板执行只读生成测试；该文件不会加入仓库。
