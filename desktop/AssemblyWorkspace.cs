@@ -97,16 +97,25 @@ namespace KiCadSolderingAssistant
             try
             {
                 if (!File.Exists(currentHtml)) throw new FileNotFoundException("装配结果已移动，请重新生成。", currentHtml);
+                Core.UpdatePresentation(currentHtml);
                 await Initialize();
                 if (allowedHost != null) view.CoreWebView2.ClearVirtualHostNameToFolderMapping(allowedHost);
                 allowedHost = "project-" + Core.Sha(Encoding.UTF8.GetBytes(currentHtml.ToLowerInvariant())).Substring(0, 24) + ".kicad.invalid";
                 view.CoreWebView2.SetVirtualHostNameToFolderMapping(allowedHost, Path.GetDirectoryName(currentHtml), CoreWebView2HostResourceAccessKind.DenyCors);
                 var loaded = new TaskCompletionSource<bool>();
+                ulong navigationId = 0;
+                EventHandler<CoreWebView2NavigationStartingEventArgs> starting = delegate(object sender, CoreWebView2NavigationStartingEventArgs e)
+                {
+                    Uri target;
+                    if (Uri.TryCreate(e.Uri, UriKind.Absolute, out target) && target.Host == allowedHost) navigationId = e.NavigationId;
+                };
                 EventHandler<CoreWebView2NavigationCompletedEventArgs> handler = delegate(object sender, CoreWebView2NavigationCompletedEventArgs e)
                 {
+                    if (navigationId == 0 || e.NavigationId != navigationId) return;
                     if (e.IsSuccess) loaded.TrySetResult(true);
                     else loaded.TrySetException(new IOException("工作区载入失败：" + e.WebErrorStatus));
                 };
+                view.CoreWebView2.NavigationStarting += starting;
                 view.CoreWebView2.NavigationCompleted += handler;
                 try
                 {
@@ -116,7 +125,7 @@ namespace KiCadSolderingAssistant
                     await WaitFor("!!document.getElementById('foc-progress')");
                     message.Visible = false; view.Visible = true; view.BringToFront();
                 }
-                finally { view.CoreWebView2.NavigationCompleted -= handler; }
+                finally { view.CoreWebView2.NavigationCompleted -= handler; view.CoreWebView2.NavigationStarting -= starting; }
             }
             catch (Exception ex)
             {
@@ -199,7 +208,8 @@ namespace KiCadSolderingAssistant
             Directory.CreateDirectory(directory);
             int blocked = BlockedRequests;
             bool prior = await view.ExecuteScriptAsync("getStoredCheckboxRefs('已焊接').size>0") == "true";
-            await view.ExecuteScriptAsync("localStorage.clear(); location.reload()");
+            await view.ExecuteScriptAsync("localStorage.clear()");
+            await Open(currentHtml);
             await Check("!!document.getElementById('foc-progress') && getStoredCheckboxRefs('已焊接').size===0");
             await view.ExecuteScriptAsync("window.testRef=pcbdata.bom.both[0][0][0];document.getElementById('reflookup').value=testRef;updateRefLookup(testRef)");
             await Check("highlightedFootprints.some(i=>pcbdata.footprints[i].ref===testRef)");
@@ -214,7 +224,8 @@ namespace KiCadSolderingAssistant
             if (!File.Exists(testBackup)) throw new IOException("应用内备份按钮未能保存进度：" + TransferError);
             var backup = Core.Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(testBackup));
             if ((string)backup["type"] != "InteractiveHtmlBom settings") throw new InvalidDataException("备份格式错误。");
-            await view.ExecuteScriptAsync("writeStorage('checkbox_已焊接','');location.reload()");
+            await view.ExecuteScriptAsync("writeStorage('checkbox_已焊接','')");
+            await Open(currentHtml);
             await Check("!!document.getElementById('foc-progress') && getStoredCheckboxRefs('已焊接').size===0");
             testRestore = testBackup;
             await view.ExecuteScriptAsync("document.getElementById('foc-import').click()");
@@ -236,9 +247,19 @@ namespace KiCadSolderingAssistant
             testDownloadDirectory = null;
             string original = currentHtml;
             string other = Path.Combine(directory, "other-project"); Directory.CreateDirectory(other);
-            string otherHtml = Path.Combine(other, "焊接助手.html"); File.Copy(original, otherHtml, true);
+            string otherHtml = Path.Combine(other, "焊接助手.html");
+            string current = File.ReadAllText(original, Encoding.UTF8).Replace("\r\n", "\n");
+            int skinStart = current.LastIndexOf("<style>", current.IndexOf("</head>"), StringComparison.Ordinal);
+            int skinEnd = current.IndexOf("</style>", skinStart, StringComparison.Ordinal);
+            string legacy = current.Substring(0, skinStart + 7) + "\n/* Local presentation only. */\n" + current.Substring(skinEnd);
+            int metadataEnd = legacy.IndexOf(";\n", legacy.LastIndexOf("const ASSEMBLY_META = ", StringComparison.Ordinal), StringComparison.Ordinal);
+            int lastScript = legacy.LastIndexOf("</script>", StringComparison.Ordinal);
+            legacy = legacy.Substring(0, metadataEnd + 2) + "throw new Error('Legacy UI was not upgraded');\n" + legacy.Substring(lastScript);
+            File.WriteAllText(otherHtml, legacy, new UTF8Encoding(false));
             await Open(otherHtml);
-            await view.ExecuteScriptAsync("localStorage.clear(); location.reload()");
+            if (File.ReadAllText(otherHtml, Encoding.UTF8).Replace("\r\n", "\n") != current) throw new InvalidDataException("旧界面升级改变了板图数据或元数据。");
+            await view.ExecuteScriptAsync("localStorage.clear()");
+            await Open(currentHtml);
             await Check("!!document.getElementById('foc-progress') && getStoredCheckboxRefs('已焊接').size===0");
             await Open(original);
             await Check("getStoredCheckboxRefs('已焊接').size===1");
@@ -258,7 +279,7 @@ namespace KiCadSolderingAssistant
             testBackup = testRestore = null;
             return new Dictionary<string, object> { { "embedded", true }, { "external_browser_opened", false }, { "prior_session_progress", prior },
                 { "search_highlight", true }, { "progress_reload", true }, { "native_backup_restore", true }, { "native_file_export", true }, { "front_back", true },
-                { "project_isolation", true }, { "no_script_errors", true }, { "offline_requests_blocked", true }, { "profile", Path.Combine(Core.DataRoot, "webview-profile") } };
+                { "project_isolation", true }, { "cached_ui_upgrade", true }, { "no_script_errors", true }, { "offline_requests_blocked", true }, { "profile", Path.Combine(Core.DataRoot, "webview-profile") } };
         }
         protected override void Dispose(bool disposing) { if (disposing) view.Dispose(); base.Dispose(disposing); }
     }

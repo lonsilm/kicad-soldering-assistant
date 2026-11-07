@@ -7,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,8 +19,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("离线 PCB 装配定位与焊接进度助手")]
 [assembly: AssemblyCompany("KiCad Soldering Assistant contributors")]
 [assembly: AssemblyProduct("KiCad 焊接助手")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace KiCadSolderingAssistant
 {
@@ -302,29 +303,88 @@ namespace KiCadSolderingAssistant
             if (!Convert.ToBoolean(manifest["source_hashes_unchanged"])) throw new InvalidDataException("源工程校验失败，停止打开结果。");
             return new GenerationResult { Board = board, Html = html, Count = Convert.ToInt32(manifest["assembly_count"]), Groups = Convert.ToInt32(manifest["bom_groups"]), Manifest = manifest };
         }
+        // Upgrade our generated presentation in place. Board data, metadata and the
+        // stable output URL stay intact, so existing assembly progress is retained.
+        internal static void UpdatePresentation(string html)
+        {
+            string original = File.ReadAllText(html, Encoding.UTF8).Replace("\r\n", "\n");
+            int headEnd = original.IndexOf("</head>", StringComparison.Ordinal);
+            int styleStart = headEnd < 0 ? -1 : original.LastIndexOf("<style>", headEnd, StringComparison.Ordinal);
+            int styleEnd = styleStart < 0 ? -1 : original.IndexOf("</style>", styleStart, StringComparison.Ordinal);
+            int metaStart = original.LastIndexOf("const ASSEMBLY_META = ", StringComparison.Ordinal);
+            int metaEnd = metaStart < 0 ? -1 : original.IndexOf(";\n", metaStart, StringComparison.Ordinal);
+            int scriptEnd = original.LastIndexOf("</script>", StringComparison.Ordinal);
+            if (styleStart < 0 || styleEnd < styleStart || metaEnd < 0 || scriptEnd < metaEnd) throw new InvalidDataException("这份结果格式较旧，请重新拖入工程生成。");
+            string currentStyle = original.Substring(styleStart, styleEnd - styleStart);
+            if (!currentStyle.Contains("/* Local presentation only.") && !currentStyle.Contains("/* Assembly workspace skin.")) throw new InvalidDataException("无法识别装配界面，请重新生成工程。");
+            string css = File.ReadAllText(Path.Combine(RuntimeRoot, "app", "assistant.css"), Encoding.UTF8).Replace("\r\n", "\n");
+            string js = File.ReadAllText(Path.Combine(RuntimeRoot, "app", "assistant.js"), Encoding.UTF8).Replace("\r\n", "\n");
+            string updated = original.Substring(0, metaEnd + 2) + js + "\n" + original.Substring(scriptEnd);
+            updated = updated.Substring(0, styleStart + 7) + "\n" + css + "\n" + updated.Substring(styleEnd);
+            if (updated == original) return;
+            string temporary = html + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temporary, updated, new UTF8Encoding(false));
+            File.Replace(temporary, html, null);
+        }
         internal static void Open(string path) { if (Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("装配结果必须在应用内打开。"); Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
     }
 
     internal sealed class DropCard : Panel
     {
         internal bool Hover;
-        internal DropCard() { DoubleBuffered = true; BackColor = Color.White; }
+        internal DropCard() { DoubleBuffered = true; BackColor = Color.FromArgb(19, 32, 43); }
+        protected override void OnPaintBackground(PaintEventArgs e) { e.Graphics.Clear(Parent == null ? BackColor : Parent.BackColor); }
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var pen = new Pen(Hover ? Color.FromArgb(24, 150, 118) : Color.FromArgb(190, 204, 219), Hover ? 2 : 1))
+            using (var pen = new Pen(Hover ? Color.FromArgb(104, 218, 192) : Color.FromArgb(55, 79, 94), Hover ? 2 : 1))
             {
                 pen.DashStyle = DashStyle.Dash;
-                e.Graphics.DrawRectangle(pen, 1, 1, Width - 3, Height - 3);
+                using (var path = new GraphicsPath())
+                {
+                    int r = 20, right = Width-2, bottom = Height-2;
+                    path.AddArc(1,1,r,r,180,90); path.AddArc(right-r,1,r,r,270,90);
+                    path.AddArc(right-r,bottom-r,r,r,0,90); path.AddArc(1,bottom-r,r,r,90,90); path.CloseFigure();
+                    using (var brush = new SolidBrush(BackColor)) e.Graphics.FillPath(brush,path);
+                    e.Graphics.DrawPath(pen,path);
+                }
+            }
+        }
+    }
+
+    internal sealed class AppButton : Button
+    {
+        internal bool Primary, Active;
+        bool hover;
+        internal AppButton() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true); FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Parent == null ? Color.FromArgb(12,19,27) : Parent.BackColor);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Width-1, Height-1);
+            using (var path = new GraphicsPath())
+            {
+                int r = 14;
+                path.AddArc(rect.Left,rect.Top,r,r,180,90); path.AddArc(rect.Right-r,rect.Top,r,r,270,90);
+                path.AddArc(rect.Right-r,rect.Bottom-r,r,r,0,90); path.AddArc(rect.Left,rect.Bottom-r,r,r,90,90); path.CloseFigure();
+                Color fill = Primary ? Color.FromArgb(104,218,192) : Active ? Color.FromArgb(28,59,53) : hover ? Color.FromArgb(31,49,62) : Color.FromArgb(23,37,49);
+                if (!Enabled) fill = Color.FromArgb(23,37,49);
+                using (var brush = new SolidBrush(fill)) e.Graphics.FillPath(brush,path);
+                using (var pen = new Pen(Primary ? fill : Active ? Color.FromArgb(58,100,85) : Color.FromArgb(43,62,77))) e.Graphics.DrawPath(pen,path);
+                Color text = !Enabled ? Color.FromArgb(82,107,122) : Primary ? Color.FromArgb(10,43,34) : Active ? Color.FromArgb(122,229,197) : Color.FromArgb(206,220,230);
+                TextRenderer.DrawText(e.Graphics,Text,Font,rect,text,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+                if (Focused && ShowFocusCues) { using(var pen = new Pen(Color.FromArgb(104,218,192))) e.Graphics.DrawRectangle(pen,3,3,Width-7,Height-7); }
             }
         }
     }
 
     internal sealed class MainForm : Form
     {
-        readonly Color Ink = Color.FromArgb(24, 43, 63);
-        readonly Color Muted = Color.FromArgb(105, 122, 139);
-        readonly Color Accent = Color.FromArgb(18, 139, 107);
+        readonly Color Ink = Color.FromArgb(225, 234, 241);
+        readonly Color Muted = Color.FromArgb(127, 149, 167);
+        readonly Color Accent = Color.FromArgb(104, 218, 192);
         internal Preferences Preferences;
         internal RuntimeInfo Runtime;
         internal GenerationResult LastResult;
@@ -336,6 +396,7 @@ namespace KiCadSolderingAssistant
         readonly TextBox outputPath = new TextBox();
         readonly TextBox logs = new TextBox();
         readonly ListBox recent = new ListBox();
+        readonly Label recentEmpty = new Label();
         readonly Button chooseFile;
         readonly Button chooseFolder;
         readonly Button pythonButton;
@@ -346,9 +407,10 @@ namespace KiCadSolderingAssistant
         readonly DropCard drop = new DropCard();
         readonly ToolTip tips = new ToolTip();
         readonly Label dropTitle;
-        readonly TabControl pages = new TabControl();
-        readonly TabPage home = new TabPage("工程");
-        readonly TabPage assembly = new TabPage("焊接工作区");
+        readonly Panel pages = new Panel();
+        readonly Panel home = new Panel { Dock = DockStyle.Fill };
+        readonly Panel assembly = new Panel { Dock = DockStyle.Fill };
+        Button homeNav, assemblyNav;
         AssemblyWorkspace workspace;
 
         internal MainForm(Preferences prefs)
@@ -358,22 +420,22 @@ namespace KiCadSolderingAssistant
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Microsoft YaHei UI", 13.333F, FontStyle.Regular, GraphicsUnit.Pixel);
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(1000, 750); MinimumSize = new Size(960, 760);
-            StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(244, 247, 251);
+            ClientSize = new Size(1120, 860); MinimumSize = new Size(1000, 840);
+            StartPosition = FormStartPosition.CenterScreen; BackColor = Color.FromArgb(12, 19, 27);
             AllowDrop = true;
 
-            var sidebar = new Panel { Dock = DockStyle.Left, Width = 220, BackColor = Color.FromArgb(14, 30, 46) };
+            var sidebar = new Panel { Dock = DockStyle.Left, Width = 224, BackColor = Color.FromArgb(15, 26, 36) };
             Controls.Add(sidebar);
             var logo = new PictureBox { Image = Icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Bounds = new Rectangle(26, 32, 50, 50) };
             sidebar.Controls.Add(logo);
-            sidebar.Controls.Add(Label("KiCad\n焊接助手", new Rectangle(24, 100, 180, 90), 22, Color.White, true));
-            sidebar.Controls.Add(Label("从工程到装配，\n每一步都看得清。", new Rectangle(27, 204, 170, 58), 11, Color.FromArgb(165, 190, 206), false));
-            string[] steps = { "01   拖入工程", "02   定位与取料", "03   记录焊接进度" };
-            for (int i = 0; i < steps.Length; i++) sidebar.Controls.Add(Label(steps[i], new Rectangle(27, 316 + 51*i, 180, 30), 11, i == 0 ? Color.FromArgb(112, 227, 191) : Color.FromArgb(187, 204, 217), i == 0));
-            var foot = Label("离线使用  ·  工程只读\nv1.2.0", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(135, 163, 183), false);
+            sidebar.Controls.Add(Label("焊接助手", new Rectangle(25, 102, 180, 45), 21, Color.White, true));
+            sidebar.Controls.Add(Label("KICAD ASSEMBLY\n\nPCB 装配工作台", new Rectangle(27, 156, 170, 85), 10, Color.FromArgb(111, 137, 155), false));
+            string[] steps = { "01    选择工程", "02    定位与取料", "03    记录焊接进度" };
+            for (int i = 0; i < steps.Length; i++) sidebar.Controls.Add(Label(steps[i], new Rectangle(27, 316 + 51*i, 180, 30), 11, i == 0 ? Color.FromArgb(112, 227, 191) : Color.FromArgb(117, 142, 161), i == 0));
+            var foot = Label("离线使用  ·  工程只读\nv1.3.0", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(92, 119, 138), false);
             foot.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; sidebar.Controls.Add(foot);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 24, 28, 22), ColumnCount = 1, RowCount = 8 };
+            var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(32, 28, 32, 24), ColumnCount = 1, RowCount = 8 };
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 186));
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 83));
@@ -384,12 +446,12 @@ namespace KiCadSolderingAssistant
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             Controls.Add(body); body.BringToFront();
             var heading = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            heading.Controls.Add(Label("准备开始焊接", new Rectangle(0, 0, 540, 40), 23, Ink, true));
-            heading.Controls.Add(Label("拖入工程，生成可交互的装配清单与板图。", new Rectangle(2, 47, 620, 28), 10, Muted, false));
+            heading.Controls.Add(Label("开始装配", new Rectangle(0, 0, 540, 40), 23, Ink, true));
+            heading.Controls.Add(Label("打开工程，板图、物料和进度尽在一处。", new Rectangle(2, 47, 620, 28), 10, Muted, false));
             body.Controls.Add(heading, 0, 0);
 
             drop.Dock = DockStyle.Fill; drop.Margin = new Padding(0, 0, 0, 4); drop.AllowDrop = true;
-            dropTitle = Label("拖入 KiCad 工程", new Rectangle(30, 24, 580, 38), 18, Ink, true);
+            dropTitle = Label("将 KiCad 工程拖到这里", new Rectangle(30, 24, 580, 38), 18, Ink, true);
             dropTitle.TextAlign = ContentAlignment.MiddleCenter;
             var formats = Label("文件夹  ·  .kicad_pro  ·  .kicad_pcb  ·  根原理图", new Rectangle(20, 71, 600, 25), 10, Muted, false);
             formats.TextAlign = ContentAlignment.MiddleCenter;
@@ -402,7 +464,7 @@ namespace KiCadSolderingAssistant
             chooseFolder.Click += async delegate { using (var dialog = new FolderBrowserDialog { Description = "选择包含 PCB 的工程文件夹" }) if (dialog.ShowDialog(this) == DialogResult.OK) await GenerateInput(dialog.SelectedPath); };
             body.Controls.Add(drop, 0, 1);
 
-            var status = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 9, 0, 8), BackColor = Color.FromArgb(229, 242, 237) };
+            var status = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 9, 0, 8), BackColor = Color.FromArgb(20, 43, 39) };
             statusTitle.SetBounds(16, 10, 620, 23); statusTitle.Font = new Font(Font, FontStyle.Bold); statusTitle.ForeColor = Accent;
             statusDetail.SetBounds(16, 35, 620, 23); statusDetail.ForeColor = Muted; statusDetail.AutoEllipsis = true;
             statusTitle.Anchor = statusDetail.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
@@ -414,6 +476,7 @@ namespace KiCadSolderingAssistant
             outputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62)); outputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); outputRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
             var outputLabel = Label("输出到", new Rectangle(0, 8, 58, 25), 10, Muted, false); outputLabel.Dock = DockStyle.Fill; outputLabel.TextAlign = ContentAlignment.MiddleLeft;
             outputRow.Controls.Add(outputLabel, 0, 0);
+            outputPath.BackColor = Color.FromArgb(23, 37, 49); outputPath.ForeColor = Ink; outputPath.BorderStyle = BorderStyle.FixedSingle;
             outputPath.Text = prefs.OutputRoot; outputPath.Dock = DockStyle.Fill; outputPath.Margin = new Padding(0, 8, 8, 0); outputRow.Controls.Add(outputPath, 1, 0);
             outputButton = Button("更改", false); outputButton.Dock = DockStyle.Fill; outputButton.Margin = new Padding(0, 3, 0, 4); outputRow.Controls.Add(outputButton, 2, 0);
             outputButton.Click += delegate { using (var dialog = new FolderBrowserDialog { Description = "选择输出父目录，每个工程会分别建立子目录" }) if (dialog.ShowDialog(this) == DialogResult.OK) { outputPath.Text = dialog.SelectedPath; Preferences.OutputRoot = dialog.SelectedPath; Save(); } };
@@ -428,17 +491,20 @@ namespace KiCadSolderingAssistant
             body.Controls.Add(runtimeRow, 0, 4);
 
             var recentHeader = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            recentHeader.Controls.Add(Label("最近生成", new Rectangle(0, 5, 200, 25), 10, Ink, true));
+            recentHeader.Controls.Add(Label("继续上次的装配", new Rectangle(0, 5, 200, 25), 10, Ink, true));
             var toggleLog = new LinkLabel { Text = "显示日志", AutoSize = true, Location = new Point(540, 6), LinkColor = Accent, Anchor = AnchorStyles.Top | AnchorStyles.Right };
             recentHeader.Controls.Add(toggleLog); recentHeader.Resize += delegate { toggleLog.Left = recentHeader.Width-toggleLog.Width; };
             body.Controls.Add(recentHeader, 0, 5);
             var listArea = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
-            recent.Dock = DockStyle.Fill; recent.BorderStyle = BorderStyle.None; recent.BackColor = Color.White; recent.ForeColor = Ink; recent.ItemHeight = 29; recent.DrawMode = DrawMode.OwnerDrawFixed;
+            recent.Dock = DockStyle.Fill; recent.BorderStyle = BorderStyle.None; recent.BackColor = Color.FromArgb(17, 28, 38); recent.ForeColor = Ink; recent.ItemHeight = 29; recent.DrawMode = DrawMode.OwnerDrawFixed;
             recent.DrawItem += delegate(object sender, DrawItemEventArgs e) { if (e.Index < 0) return; e.DrawBackground(); TextRenderer.DrawText(e.Graphics, recent.Items[e.Index].ToString(), Font, new Rectangle(e.Bounds.X+10,e.Bounds.Y+4,e.Bounds.Width-20,e.Bounds.Height-4), (e.State & DrawItemState.Selected) != 0 ? SystemColors.HighlightText : Ink, TextFormatFlags.EndEllipsis); };
             recent.DoubleClick += async delegate { var r = recent.SelectedItem as RecentProject; if (r != null) await OpenAssembly(r.Html); };
-            logs.Multiline = true; logs.ReadOnly = true; logs.ScrollBars = ScrollBars.Vertical; logs.Dock = DockStyle.Fill; logs.Font = new Font("Consolas", 12, FontStyle.Regular, GraphicsUnit.Pixel); logs.Visible = false;
+            logs.BackColor = Color.FromArgb(17, 28, 38); logs.ForeColor = Muted; logs.BorderStyle = BorderStyle.None; logs.Multiline = true; logs.ReadOnly = true; logs.ScrollBars = ScrollBars.Vertical; logs.Dock = DockStyle.Fill; logs.Font = new Font("Consolas", 12, FontStyle.Regular, GraphicsUnit.Pixel); logs.Visible = false;
             listArea.Controls.Add(recent); listArea.Controls.Add(logs);
-            toggleLog.Click += delegate { logs.Visible = !logs.Visible; recent.Visible = !logs.Visible; toggleLog.Text = logs.Visible ? "最近工程" : "显示日志"; };
+            recentEmpty.Dock = DockStyle.Fill; recentEmpty.Text = "还没有装配记录\n\n打开第一份工程，就可以从这里继续上次的工作。".Replace("\n", Environment.NewLine);
+            recentEmpty.TextAlign = ContentAlignment.MiddleCenter; recentEmpty.ForeColor = Muted; recentEmpty.BackColor = recent.BackColor;
+            listArea.Controls.Add(recentEmpty);
+            toggleLog.Click += delegate { logs.Visible = !logs.Visible; recent.Visible = !logs.Visible; recentEmpty.Visible = !logs.Visible && recent.Items.Count == 0; toggleLog.Text = logs.Visible ? "最近工程" : "显示日志"; };
             body.Controls.Add(listArea, 0, 6);
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(0) };
             openButton = Button("进入焊接工作区", true); openButton.Size = new Size(153, 36); openButton.Enabled = false;
@@ -453,8 +519,19 @@ namespace KiCadSolderingAssistant
             // Keep project selection and assembly in the same native window.
             Controls.Remove(sidebar); Controls.Remove(body);
             home.Controls.Add(sidebar); home.Controls.Add(body); body.BringToFront();
-            pages.Dock = DockStyle.Fill; pages.TabPages.Add(home); pages.TabPages.Add(assembly);
-            Controls.Add(pages);
+            pages.Dock = DockStyle.Fill; pages.Margin = new Padding(0); pages.Controls.Add(home); pages.Controls.Add(assembly);
+            var navigation = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(16, 9, 16, 9), BackColor = Color.FromArgb(15, 26, 36) };
+            navigation.Controls.Add(Label("KiCad  /  焊接助手", new Rectangle(23, 17, 250, 24), 10, Ink, true));
+            var navButtons = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 250, FlowDirection = FlowDirection.LeftToRight, BackColor = navigation.BackColor };
+            homeNav = Button("工程", false); homeNav.Size = new Size(90, 34);
+            assemblyNav = Button("焊接工作区", false); assemblyNav.Size = new Size(128, 34);
+            navButtons.Controls.Add(homeNav); navButtons.Controls.Add(assemblyNav); navigation.Controls.Add(navButtons);
+            homeNav.Click += delegate { ShowPage(home); };
+            assemblyNav.Click += delegate { if (workspace != null) ShowPage(assembly); else SetStatus("先打开一个工程", "选择工程后即可进入焊接工作区。", false); };
+            var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
+            shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            navigation.Dock = DockStyle.Fill; navigation.Margin = new Padding(0); shell.Controls.Add(navigation, 0, 0); shell.Controls.Add(pages, 0, 1);
+            Controls.Add(shell); ShowPage(home);
             UpdateRecent(); SetStatus("准备就绪", "先保存 PCB，再拖入工程。源文件保持只读。", false);
         }
         Label Label(string text, Rectangle rect, float size, Color color, bool bold)
@@ -463,8 +540,21 @@ namespace KiCadSolderingAssistant
         }
         Button Button(string text, bool primary)
         {
-            var b = new Button { Text = text, FlatStyle = FlatStyle.Flat, BackColor = primary ? Accent : Color.White, ForeColor = primary ? Color.White : Ink, Cursor = Cursors.Hand, Margin = new Padding(0,0,10,0) };
-            b.FlatAppearance.BorderSize = primary ? 0 : 1; b.FlatAppearance.BorderColor = Color.FromArgb(204, 215, 226); return b;
+            return new AppButton { Text = text, Primary = primary, Cursor = Cursors.Hand, Margin = new Padding(0,0,10,0), Font = Font };
+        }
+        void ShowPage(Panel page)
+        {
+            home.Visible = page == home; assembly.Visible = page == assembly;
+            page.BringToFront();
+            if (homeNav != null) { ((AppButton)homeNav).Active = page == home; homeNav.Invalidate(); }
+            if (assemblyNav != null) { ((AppButton)assemblyNav).Active = page == assembly; assemblyNav.Invalidate(); }
+        }
+        [DllImport("dwmapi.dll")]
+        static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try { int dark = 1; DwmSetWindowAttribute(Handle, 20, ref dark, 4); } catch { }
         }
         void AttachDrop(Control control)
         {
@@ -488,7 +578,7 @@ namespace KiCadSolderingAssistant
             logs.AppendText(value + Environment.NewLine);
         }
         void Save() { try { Core.SavePreferences(Preferences); } catch (Exception ex) { AppendLog("无法保存应用偏好：" + ex.Message); } }
-        void UpdateRecent() { recent.Items.Clear(); foreach (var item in Preferences.Recent) recent.Items.Add(item); }
+        void UpdateRecent() { recent.Items.Clear(); foreach (var item in Preferences.Recent) recent.Items.Add(item); recentEmpty.Visible = recent.Items.Count == 0 && !logs.Visible; }
         internal void SetStatus(string title, string detail, bool error)
         {
             statusTitle.Text = title; statusTitle.ForeColor = error ? Color.FromArgb(172, 61, 56) : Accent; statusDetail.Text = detail; tips.SetToolTip(statusDetail, detail);
@@ -562,13 +652,13 @@ namespace KiCadSolderingAssistant
             try
             {
                 if (!File.Exists(html)) throw new FileNotFoundException("找不到装配结果，请重新拖入工程生成。", html);
-                pages.SelectedTab = assembly;
+                ShowPage(assembly);
                 if (!SelfTest && WindowState != FormWindowState.Maximized) WindowState = FormWindowState.Maximized;
                 if (workspace == null) { workspace = new AssemblyWorkspace(); workspace.Dock = DockStyle.Fill; assembly.Controls.Add(workspace); }
                 await workspace.Open(html);
                 Text = Path.GetFileName(Path.GetDirectoryName(html)) + " · KiCad 焊接助手";
             }
-            catch (Exception ex) { AppendLog(ex.ToString()); SetStatus("无法打开焊接工作区", ex.Message, true); if (workspace == null) pages.SelectedTab = home; if (SelfTest) throw; }
+            catch (Exception ex) { AppendLog(ex.ToString()); SetStatus("无法打开焊接工作区", ex.Message, true); if (workspace == null) ShowPage(home); if (SelfTest) throw; }
         }
         internal Task<Dictionary<string, object>> TestWorkspace()
         {
@@ -607,12 +697,18 @@ namespace KiCadSolderingAssistant
                 {
                     int exitCode = 0;
                     form.SelfTest = test;
-                    if (test) { form.Opacity = 0; form.ShowInTaskbar = false; form.ClientSize = new Size(1800, 1100); }
+                    if (test) { form.Opacity = 0; form.ShowInTaskbar = false; }
                     form.Shown += async delegate
                     {
                         try
                         {
                             await form.DetectRuntime();
+                            if (test)
+                            {
+                                form.PerformLayout();
+                                using (var bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(0, 0, form.Width, form.Height)); bitmap.Save(Path.Combine(Core.DataRoot, "home-preview.png")); }
+                                form.ClientSize = new Size(1800, 1100);
+                            }
                             string input = test ? Option(args, "--self-test") : args.FirstOrDefault(a => !a.StartsWith("--"));
                             if (!String.IsNullOrWhiteSpace(input)) await form.GenerateInput(input);
                             if (test)

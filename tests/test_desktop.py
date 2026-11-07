@@ -40,7 +40,7 @@ def run(name,input_path,expected=True):
     if expected:
         assert report['source_hashes_unchanged']
         workspace=report['workspace']
-        for key in ['embedded','search_highlight','progress_reload','native_backup_restore','native_file_export','front_back','project_isolation','no_script_errors','offline_requests_blocked']:
+        for key in ['embedded','search_highlight','progress_reload','native_backup_restore','native_file_export','front_back','project_isolation','cached_ui_upgrade','no_script_errors','offline_requests_blocked']:
             assert workspace[key],(name,key)
         assert workspace['external_browser_opened'] is False
         manifest=json.loads((Path(report['html']).parent/'manifest.json').read_text(encoding='utf-8'))

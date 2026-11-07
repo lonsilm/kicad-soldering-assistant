@@ -42,7 +42,7 @@ window.addEventListener('load', function () {
     'Fab layer':'封装轮廓','Silkscreen':'丝印','Values':'器件值','Pads':'焊盘',
     'Tracks':'走线','Zones':'铜区','DNP outlined':'标出不焊器件',
     'Highlight first pin':'突出1脚','None':'无','All':'全部','Selected':'选中器件',
-    'Redraw on drag':'拖动时重绘','Board rotation':'板图旋转','Offset back rotation':'背面旋转180°',
+    'Continuous redraw on drag':'拖动时连续重绘','Highlight row on click':'点击时高亮行','Redraw on drag':'拖动时重绘','Board rotation':'板图旋转','Offset back rotation':'背面旋转180°',
     'Bom checkboxes':'进度勾选列','Mark when checked':'以此列标记已完成',
     'Created using':'基于','Board stats':'板子统计','Front':'正面','Back':'背面','Total':'合计',
     'Components':'器件','Groups':'分组','SMD pads':'贴片焊盘','TH pads':'通孔焊盘',
@@ -79,15 +79,18 @@ window.addEventListener('load', function () {
   }
   const total=pcbdata.footprints.length-pcbdata.bom.skipped.length;
   const header=document.createElement('div'); header.className='foc-head';
-  header.innerHTML='<div class="foc-head-row"><span class="foc-brand">KiCad 焊接助手</span>'+
-    '<span class="foc-tag">离线可用 · '+total+' 个器件</span>'+
-    '<span class="foc-progress" id="foc-progress"></span>'+
-    '<button id="foc-export" type="button">备份进度</button>'+
-    '<button id="foc-import" type="button">恢复进度</button></div>'+
-    '<div class="foc-help">点击BOM定位，点击板图反查；滚轮缩放、拖动平移。'+
-    '<strong>已焊接</strong>勾选后变绿；同料分组勾选会标记整组，逐个焊接可切换“逐个器件”。'+
-    '背面已按翻板视角镜像。进度保存在当前应用，换电脑前请备份。</div>'+
+  header.innerHTML='<div class="foc-head-row"><div class="foc-identity"><span class="foc-appmark" aria-hidden="true">'+
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/><path d="m10 12 1.5 1.5L14 10"/></svg></span>'+
+    '<div><span class="foc-eyebrow">ASSEMBLY WORKSPACE</span><div class="foc-project"></div></div></div>'+
+    '<div class="foc-session"><span class="foc-tag">'+total+' 个器件</span><span class="foc-progress" id="foc-progress"></span></div>'+
+    '<div class="foc-file-actions"><button id="foc-export" type="button">备份进度</button>'+
+    '<button id="foc-import" type="button">恢复进度</button></div></div>'+
     '<div class="foc-meter"><span id="foc-meter"></span></div>';
+  header.querySelector('.foc-project').textContent=ASSEMBLY_META.project_name;
+  const statusbar=document.createElement('div');statusbar.className='foc-statusbar';
+  statusbar.innerHTML='<span><i class="foc-live-dot"></i>本地工作区 <span class="foc-divider">/</span> 工程只读</span>'+
+    '<span>滚轮缩放 · 拖动平移 · 点击器件定位</span><span class="foc-storage-note">进度自动保存在此应用</span>';
+  wrapper.append(statusbar);
   wrapper.prepend(header);
   const native=!!window.chrome?.webview;
   if(native) {
@@ -98,18 +101,41 @@ window.addEventListener('load', function () {
       reader.readAsDataURL(blob);
     };
   } else {
-    const help=header.querySelector('.foc-help').lastChild;
-    help.textContent=help.textContent.replace('当前应用','当前浏览器');
+    statusbar.querySelector('.foc-storage-note').textContent='进度自动保存在此浏览器';
   }
   document.getElementById('foc-export').onclick=()=>native?chrome.webview.postMessage('assembly.backup'):saveSettings();
   document.getElementById('foc-import').onclick=()=>native?chrome.webview.postMessage('assembly.restore'):loadSettings();
   const front=document.getElementById('fl-btn'), back=document.getElementById('bl-btn'), both=document.getElementById('fb-btn');
   front.textContent='正面';back.textContent='背面';both.textContent='双面';
   for (const b of [front,back,both]) b.style.width='50px';
+  const toolLabels={
+    'bom-grouped-btn':'同料分组','bom-ungrouped-btn':'逐个器件','bom-netlist-btn':'网络',
+    'bom-btn':'仅清单','lr-btn':'左右布局','tb-btn':'上下布局'
+  };
+  for(const [id,label] of Object.entries(toolLabels)) {
+    const button=document.getElementById(id);button.textContent=label;button.classList.add('foc-tool');button.setAttribute('aria-label',label);
+  }
+  for(const [selector,label] of [['.menubtn','显示设置'],['.statsbtn','统计'],['.iobtn','导出']]) {
+    const button=document.querySelector(selector);button.textContent=label;button.setAttribute('aria-label',label);
+  }
+  const top=document.getElementById('top');
+  const toolbarTitle=document.createElement('span');toolbarTitle.className='foc-toolbar-title';toolbarTitle.textContent='工作视图';top.prepend(toolbarTitle);
+  // Place layout, grouping, board side and utility menus in a predictable order.
+  const topControls=document.getElementById('bomcontrols');
+  for(const id of ['bom-grouped-btn','lr-btn','fl-btn']) topControls.append(document.getElementById(id).parentElement);
+  for(const cls of ['statsbtn','iobtn','menubtn']) topControls.append(document.querySelector('.'+cls).parentElement);
+  const searchRow=document.getElementById('reflookup').parentElement;searchRow.className='foc-searchrow';
+  document.getElementById('reflookup').placeholder='搜索位号，如 R51';
+  document.getElementById('filter').placeholder='参数、封装或料号';
+  document.getElementById('copy').textContent='复制';
+  const bomHeading=document.createElement('div');bomHeading.className='foc-pane-heading';
+  const bomTitle=document.createElement('strong');bomTitle.textContent='物料清单';
+  const bomCount=document.createElement('span');bomCount.textContent=pcbdata.bom.both.length+' 组物料';
+  bomHeading.append(bomTitle,bomCount);document.getElementById('bomdiv').prepend(bomHeading);
   function progress() {
     const soldered=getStoredCheckboxRefs('已焊接').size;
     const checked=getStoredCheckboxRefs('已检查').size;
-    document.getElementById('foc-progress').textContent='已焊 '+soldered+' / '+total+'　已检查 '+checked+' / '+total;
+    document.getElementById('foc-progress').innerHTML='<strong>'+Math.round(100*soldered/Math.max(total,1))+'%</strong><span>已焊 '+soldered+' / '+total+'</span><span class="foc-checked-count">已检查 '+checked+'</span>';
     document.getElementById('foc-meter').style.width=(100*soldered/Math.max(total,1))+'%';
   }
   // Small shortcuts use the same native filters and highlighting as the BOM.
@@ -142,13 +168,13 @@ window.addEventListener('load', function () {
     toolbar.appendChild(b);
   }
   toolbar.firstChild.classList.add('foc-active');
-  document.getElementById('bomdiv').prepend(toolbar);
+  searchRow.after(toolbar);
   const detail=document.createElement('div');detail.className='foc-detail';detail.id='foc-detail';
-  detail.textContent='选择一个器件或BOM行，查看料号与装配备注。';
+  detail.innerHTML='<span class="foc-detail-hint">选择器件</span><span>点击清单或板图，查看物料详情</span>';
   toolbar.after(detail);
   EventHandler.registerCallback(IBOM_EVENT_TYPES.HIGHLIGHT_EVENT,event=>{
     const refs=event.args.refs;
-    detail.replaceChildren();
+    detail.replaceChildren();detail.classList.toggle('foc-has-selection',!!refs?.length);
     if(!refs||!refs.length) {detail.textContent=event.args.net||'选择一个器件查看详情';return;}
     const fs=pcbdata.bom.fields[refs[0][1]];
     const title=document.createElement('strong');title.textContent=refs.map(r=>r[0]).join(', ')+' · '+fs[0];detail.appendChild(title);
