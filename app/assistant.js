@@ -23,6 +23,17 @@ saveSettings=function() {
   settings.checkboxStoredRefs=Object.fromEntries(Object.entries(old).map(([k,v])=>[k,assemblyRefString(v)]));
   try {upstreamSaveSettings();} finally {settings.checkboxStoredRefs=old;}
 };
+// Native EXE and standalone exports use the same portable progress format.
+function assemblyProgressBackup() {
+  const saved={...settings, checkboxStoredRefs:Object.fromEntries(Object.entries(settings.checkboxStoredRefs).map(([k,v])=>[k,assemblyRefString(v)]))};
+  return JSON.stringify({type:'InteractiveHtmlBom settings',version:1,pcbmetadata:pcbdata.metadata,settings:saved},null,2);
+}
+function assemblyRestoreProgress(data) {
+  if(!data || data.type!=='InteractiveHtmlBom settings' || !data.settings || typeof data.settings!=='object' || Array.isArray(data.settings)) return false;
+  if(data.pcbmetadata?.assembly_id!==pcbdata.metadata.assembly_id && !confirm('这份进度备份可能属于其他工程，仍要恢复到当前板子吗？')) return false;
+  overwriteSettings(data.settings);
+  return true;
+}
 window.addEventListener('load', function () {
   document.title = ASSEMBLY_META.project_name+' · 焊接助手';
   const words = {
@@ -75,11 +86,23 @@ window.addEventListener('load', function () {
     '<button id="foc-import" type="button">恢复进度</button></div>'+
     '<div class="foc-help">点击BOM定位，点击板图反查；滚轮缩放、拖动平移。'+
     '<strong>已焊接</strong>勾选后变绿；同料分组勾选会标记整组，逐个焊接可切换“逐个器件”。'+
-    '背面已按翻板视角镜像。进度保存在当前浏览器，换电脑前请备份。</div>'+
+    '背面已按翻板视角镜像。进度保存在当前应用，换电脑前请备份。</div>'+
     '<div class="foc-meter"><span id="foc-meter"></span></div>';
   wrapper.prepend(header);
-  document.getElementById('foc-export').onclick=saveSettings;
-  document.getElementById('foc-import').onclick=loadSettings;
+  const native=!!window.chrome?.webview;
+  if(native) {
+    // Send exports to the app's native Save dialog instead of browser downloads.
+    saveFile=function(filename,blob) {
+      const reader=new FileReader();
+      reader.onload=()=>chrome.webview.postMessage({type:'assembly.export',filename,data:reader.result});
+      reader.readAsDataURL(blob);
+    };
+  } else {
+    const help=header.querySelector('.foc-help').lastChild;
+    help.textContent=help.textContent.replace('当前应用','当前浏览器');
+  }
+  document.getElementById('foc-export').onclick=()=>native?chrome.webview.postMessage('assembly.backup'):saveSettings();
+  document.getElementById('foc-import').onclick=()=>native?chrome.webview.postMessage('assembly.restore'):loadSettings();
   const front=document.getElementById('fl-btn'), back=document.getElementById('bl-btn'), both=document.getElementById('fb-btn');
   front.textContent='正面';back.textContent='背面';both.textContent='双面';
   for (const b of [front,back,both]) b.style.width='50px';

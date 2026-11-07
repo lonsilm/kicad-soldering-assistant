@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("离线 PCB 装配定位与焊接进度助手")]
 [assembly: AssemblyCompany("KiCad Soldering Assistant contributors")]
 [assembly: AssemblyProduct("KiCad 焊接助手")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace KiCadSolderingAssistant
 {
@@ -302,7 +302,7 @@ namespace KiCadSolderingAssistant
             if (!Convert.ToBoolean(manifest["source_hashes_unchanged"])) throw new InvalidDataException("源工程校验失败，停止打开结果。");
             return new GenerationResult { Board = board, Html = html, Count = Convert.ToInt32(manifest["assembly_count"]), Groups = Convert.ToInt32(manifest["bom_groups"]), Manifest = manifest };
         }
-        internal static void Open(string path) { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        internal static void Open(string path) { if (Path.GetExtension(path).Equals(".html", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("装配结果必须在应用内打开。"); Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
     }
 
     internal sealed class DropCard : Panel
@@ -346,6 +346,10 @@ namespace KiCadSolderingAssistant
         readonly DropCard drop = new DropCard();
         readonly ToolTip tips = new ToolTip();
         readonly Label dropTitle;
+        readonly TabControl pages = new TabControl();
+        readonly TabPage home = new TabPage("工程");
+        readonly TabPage assembly = new TabPage("焊接工作区");
+        AssemblyWorkspace workspace;
 
         internal MainForm(Preferences prefs)
         {
@@ -366,7 +370,7 @@ namespace KiCadSolderingAssistant
             sidebar.Controls.Add(Label("从工程到装配，\n每一步都看得清。", new Rectangle(27, 204, 170, 58), 11, Color.FromArgb(165, 190, 206), false));
             string[] steps = { "01   拖入工程", "02   定位与取料", "03   记录焊接进度" };
             for (int i = 0; i < steps.Length; i++) sidebar.Controls.Add(Label(steps[i], new Rectangle(27, 316 + 51*i, 180, 30), 11, i == 0 ? Color.FromArgb(112, 227, 191) : Color.FromArgb(187, 204, 217), i == 0));
-            var foot = Label("离线使用  ·  工程只读\nv1.1.0", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(135, 163, 183), false);
+            var foot = Label("离线使用  ·  工程只读\nv1.2.0", new Rectangle(27, 657, 180, 64), 9, Color.FromArgb(135, 163, 183), false);
             foot.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; sidebar.Controls.Add(foot);
 
             var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 24, 28, 22), ColumnCount = 1, RowCount = 8 };
@@ -431,21 +435,26 @@ namespace KiCadSolderingAssistant
             var listArea = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
             recent.Dock = DockStyle.Fill; recent.BorderStyle = BorderStyle.None; recent.BackColor = Color.White; recent.ForeColor = Ink; recent.ItemHeight = 29; recent.DrawMode = DrawMode.OwnerDrawFixed;
             recent.DrawItem += delegate(object sender, DrawItemEventArgs e) { if (e.Index < 0) return; e.DrawBackground(); TextRenderer.DrawText(e.Graphics, recent.Items[e.Index].ToString(), Font, new Rectangle(e.Bounds.X+10,e.Bounds.Y+4,e.Bounds.Width-20,e.Bounds.Height-4), (e.State & DrawItemState.Selected) != 0 ? SystemColors.HighlightText : Ink, TextFormatFlags.EndEllipsis); };
-            recent.DoubleClick += delegate { var r = recent.SelectedItem as RecentProject; if (r != null && File.Exists(r.Html)) OpenSafely(r.Html); };
+            recent.DoubleClick += async delegate { var r = recent.SelectedItem as RecentProject; if (r != null) await OpenAssembly(r.Html); };
             logs.Multiline = true; logs.ReadOnly = true; logs.ScrollBars = ScrollBars.Vertical; logs.Dock = DockStyle.Fill; logs.Font = new Font("Consolas", 12, FontStyle.Regular, GraphicsUnit.Pixel); logs.Visible = false;
             listArea.Controls.Add(recent); listArea.Controls.Add(logs);
             toggleLog.Click += delegate { logs.Visible = !logs.Visible; recent.Visible = !logs.Visible; toggleLog.Text = logs.Visible ? "最近工程" : "显示日志"; };
             body.Controls.Add(listArea, 0, 6);
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(0) };
-            openButton = Button("打开焊接页面", true); openButton.Size = new Size(153, 36); openButton.Enabled = false;
+            openButton = Button("进入焊接工作区", true); openButton.Size = new Size(153, 36); openButton.Enabled = false;
             folderButton = Button("打开输出目录", false); folderButton.Size = new Size(153, 36);
             footer.Controls.Add(openButton); footer.Controls.Add(folderButton);
-            openButton.Click += delegate { if (LastResult != null) OpenSafely(LastResult.Html); };
+            openButton.Click += async delegate { if (LastResult != null) await OpenAssembly(LastResult.Html); };
             folderButton.Click += delegate { string path = outputPath.Text.Trim(); if (Directory.Exists(path)) OpenSafely(path); else SetStatus("还没有输出目录", "生成第一份工程后即可打开。", false); };
             body.Controls.Add(footer, 0, 7);
 
             AttachDrop(this); AttachDrop(drop); AttachDrop(dropTitle); AttachDrop(formats);
             FormClosing += delegate(object sender, FormClosingEventArgs e) { if (Busy) { e.Cancel = true; SetStatus("工程仍在生成", "请等生成完成后再关闭窗口。", false); } };
+            // Keep project selection and assembly in the same native window.
+            Controls.Remove(sidebar); Controls.Remove(body);
+            home.Controls.Add(sidebar); home.Controls.Add(body); body.BringToFront();
+            pages.Dock = DockStyle.Fill; pages.TabPages.Add(home); pages.TabPages.Add(assembly);
+            Controls.Add(pages);
             UpdateRecent(); SetStatus("准备就绪", "先保存 PCB，再拖入工程。源文件保持只读。", false);
         }
         Label Label(string text, Rectangle rect, float size, Color color, bool bold)
@@ -488,7 +497,7 @@ namespace KiCadSolderingAssistant
         {
             Busy = value; progress.Visible = value;
             foreach (var b in new[] { chooseFile, chooseFolder, pythonButton, outputButton }) b.Enabled = !value;
-            outputPath.Enabled = !value;
+            outputPath.Enabled = !value; recent.Enabled = !value;
         }
         internal async Task DetectRuntime()
         {
@@ -543,10 +552,27 @@ namespace KiCadSolderingAssistant
                 Preferences.Recent.Insert(0, new RecentProject { Board = board, Html = LastResult.Html, Count = LastResult.Count });
                 Preferences.Recent = Preferences.Recent.Take(8).ToList(); Save(); UpdateRecent(); openButton.Enabled = true;
                 SetStatus("焊接页面已准备好", LastResult.Count + " 个器件 · " + LastResult.Groups + " 组物料 · 源文件校验通过", false);
-                if (!SelfTest) OpenSafely(LastResult.Html);
+                await OpenAssembly(LastResult.Html);
             }
             catch (Exception ex) { AppendLog(ex.ToString()); SetStatus("这次没有生成完成", ex.Message.Replace(Environment.NewLine, " "), true); if (SelfTest) throw; }
             finally { SetBusy(false); }
+        }
+        internal async Task OpenAssembly(string html)
+        {
+            try
+            {
+                if (!File.Exists(html)) throw new FileNotFoundException("找不到装配结果，请重新拖入工程生成。", html);
+                pages.SelectedTab = assembly;
+                if (!SelfTest && WindowState != FormWindowState.Maximized) WindowState = FormWindowState.Maximized;
+                if (workspace == null) { workspace = new AssemblyWorkspace(); workspace.Dock = DockStyle.Fill; assembly.Controls.Add(workspace); }
+                await workspace.Open(html);
+                Text = Path.GetFileName(Path.GetDirectoryName(html)) + " · KiCad 焊接助手";
+            }
+            catch (Exception ex) { AppendLog(ex.ToString()); SetStatus("无法打开焊接工作区", ex.Message, true); if (workspace == null) pages.SelectedTab = home; if (SelfTest) throw; }
+        }
+        internal Task<Dictionary<string, object>> TestWorkspace()
+        {
+            return workspace.SelfCheck(Path.Combine(Core.DataRoot, "workspace-test"));
         }
         void OpenSafely(string path) { try { Core.Open(path); } catch (Exception ex) { AppendLog(ex.Message); SetStatus("打开文件失败", ex.Message, true); } }
     }
@@ -568,6 +594,12 @@ namespace KiCadSolderingAssistant
             try
             {
                 Directory.CreateDirectory(Core.DataRoot); Core.RuntimeRoot = Core.ExtractRuntime();
+                AppDomain.CurrentDomain.AssemblyResolve += delegate(object sender, ResolveEventArgs e)
+                {
+                    string name = new AssemblyName(e.Name).Name;
+                    if (name != "Microsoft.Web.WebView2.Core" && name != "Microsoft.Web.WebView2.WinForms") return null;
+                    return Assembly.LoadFrom(Path.Combine(Core.RuntimeRoot, "desktop", "webview2", name + ".dll"));
+                };
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
                 var prefs = Core.ReadPreferences();
                 if (test) prefs.OutputRoot = Path.Combine(Core.DataRoot, "output");
@@ -575,7 +607,7 @@ namespace KiCadSolderingAssistant
                 {
                     int exitCode = 0;
                     form.SelfTest = test;
-                    if (test) { form.Opacity = 0; form.ShowInTaskbar = false; }
+                    if (test) { form.Opacity = 0; form.ShowInTaskbar = false; form.ClientSize = new Size(1800, 1100); }
                     form.Shown += async delegate
                     {
                         try
@@ -587,6 +619,7 @@ namespace KiCadSolderingAssistant
                             {
                                 if (form.LastResult == null) throw new InvalidOperationException("未生成结果。");
                                 var data = new Dictionary<string, object> { { "passed", true }, { "executable", Application.ExecutablePath }, { "runtime_root", Core.RuntimeRoot }, { "python", form.Runtime.Python }, { "kicad_version", form.Runtime.Version }, { "board", form.LastResult.Board }, { "html", form.LastResult.Html }, { "assembly_count", form.LastResult.Count }, { "bom_groups", form.LastResult.Groups }, { "source_hashes_unchanged", form.LastResult.Manifest["source_hashes_unchanged"] }, { "native_window", true }, { "no_console", true }, { "embedded_runtime", true } };
+                                data["workspace"] = await form.TestWorkspace();
                                 File.WriteAllText(report, Core.Json.Serialize(data), new UTF8Encoding(false));
                                 form.PerformLayout();
                                 using (var bitmap = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bitmap, new Rectangle(0, 0, form.Width, form.Height)); bitmap.Save(Path.Combine(Core.DataRoot, "native_preview.png")); }

@@ -33,12 +33,16 @@ cases=[]
 
 def run(name,input_path,expected=True):
     state=RESULTS/'desktop_states'/name
-    p=subprocess.run([str(copied),'--self-test',str(input_path),'--test-root',str(state)],timeout=60)
+    p=subprocess.run([str(copied),'--self-test',str(input_path),'--test-root',str(state)],timeout=120)
     report=json.loads((state/'SELF_TEST.json').read_text(encoding='utf-8'))
     assert (p.returncode==0)==expected,(name,report)
     assert report['passed']==expected,(name,report)
     if expected:
         assert report['source_hashes_unchanged']
+        workspace=report['workspace']
+        for key in ['embedded','search_highlight','progress_reload','native_backup_restore','native_file_export','front_back','project_isolation','no_script_errors','offline_requests_blocked']:
+            assert workspace[key],(name,key)
+        assert workspace['external_browser_opened'] is False
         manifest=json.loads((Path(report['html']).parent/'manifest.json').read_text(encoding='utf-8'))
         for source,digest in manifest['source_hashes'].items():assert hashlib.sha256(Path(source).read_bytes()).hexdigest()==digest
     cases.append(dict(name=name,expected_success=expected,**report))
@@ -53,6 +57,7 @@ original=generator.read_bytes()
 generator.write_text('# simulated corrupted private test cache\n',encoding='utf-8')
 state,repaired=run('portable-special-path',fixture)
 assert generator.read_bytes()==original,'Executable must restore its embedded files'
+assert repaired['workspace']['prior_session_progress'],'Progress must survive closing and restarting the EXE'
 assert repaired['html']==report['html'],'Same source must retain output identity'
 prefs=json.loads((state/'settings.json').read_text(encoding='utf-8'))
 assert len(prefs['Recent'])==1,'Regeneration must not duplicate recent projects'
@@ -67,6 +72,7 @@ for index,board in enumerate(boards):run('real-board-'+str(index),board)
 result=dict(passed=True,single_copied_exe_sha256=hashlib.sha256(image).hexdigest(),cases=cases,
     checks=['Windows GUI subsystem','single EXE with no adjacent resources','Unicode space apostrophe ampersand paths',
     'real native window generation','source hashes unchanged','corrupt cache self-repair','stable output identity',
-    'recent projects deduplication','multi-board selection required','invalid inputs produce usable errors'])
+    'recent projects deduplication','embedded WebView2 workspace','no external HTML shell navigation',
+    'native progress backup/restore','progress survives EXE restart','project-isolated storage','offline resource blocking','multi-board selection required','invalid inputs produce usable errors'])
 (RESULTS/'DESKTOP_VALIDATION.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
-print('PASS: copied single EXE, special paths, cache repair, stable identity, errors, read-only real boards')
+print('PASS: copied EXE, embedded workspace, highlight, native backup/restore, restart persistence, isolation, offline, read-only boards')

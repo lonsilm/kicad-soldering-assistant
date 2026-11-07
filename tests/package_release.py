@@ -27,13 +27,14 @@ print(json.dumps(report,ensure_ascii=False))
 # The native application is distributed independently as one executable.
 exe = dist/'KiCad焊接助手.exe'
 if exe.is_file():
-    native = dist/'KiCadSolderingAssistant-v1.1.0-Windows.zip'
+    native = dist/'KiCadSolderingAssistant-v1.2.0-Windows.zip'
     with zipfile.ZipFile(native,'w',compression=zipfile.ZIP_DEFLATED) as z:
         z.write(exe,exe.name)
         z.write(root/'使用说明.md','使用说明.md')
         z.write(root/'LICENSE','LICENSE')
         z.write(vendor/'LICENSE','ThirdParty/InteractiveHtmlBom-LICENSE')
+        z.write(root/'docs/WebView2-LICENSE.txt','ThirdParty/WebView2-LICENSE.txt')
     with zipfile.ZipFile(native) as z:
         assert z.testzip() is None
-    (dist/'SHA256SUMS.txt').write_text(hashlib.sha256(exe.read_bytes()).hexdigest()+'  '+exe.name+'\n',encoding='utf-8')
+    (dist/'SHA256SUMS.txt').write_bytes((hashlib.sha256(exe.read_bytes()).hexdigest()+'  '+exe.name+'\n').encode('utf-8'))
     print('Native Windows package: '+str(native))
